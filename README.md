@@ -38,4 +38,4 @@ bash or zsh, git, curl (for update check).
 
 ## Version
 
-See `VERSION` file. Current: 1.2.2
+See `VERSION` file. Current: 1.2.3

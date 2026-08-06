@@ -11,6 +11,7 @@ _GTAG_ERR='\033[38;5;196m'
 _GTAG_TREE_LIMIT=4   # nombre de tags affichés par environnement dans l'arbre (0 = illimité)
 
 _gtag_confirm() {
+    emulate -L bash 2>/dev/null
     local msg="$1" answer
     read -rp "$(printf "%b" "${_GTAG_INFO}${msg}${_GTAG_RESET} [y/N] ")" answer
     [[ "$answer" =~ ^[yY]$ ]]
@@ -40,6 +41,7 @@ _gtag_tree() {
     printf "%b\n" "${_GTAG_BOLD}Tags${_GTAG_RESET}"
 
     _gtag_print_section() {
+        emulate -L bash 2>/dev/null
         local label="$1" color="$2" prefix_char="$3"; shift 3
         local -a items=("$@")
         local total=${#items[@]}
