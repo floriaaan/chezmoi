@@ -6,9 +6,9 @@ _git_segment() {
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
     [ -z "$branch" ] && return
     if ! git diff --quiet --ignore-submodules HEAD 2>/dev/null; then
-        dirty=" %{$'\e[38;5;167m'%}●%{$'\e[0m'%}"
+        dirty=" %F{167}●%f"
     fi
-    echo " on %{$'\e[38;5;179m'%}⎇ $branch%{$'\e[0m'%}$dirty"
+    echo " on %F{179}⎇ $branch%f$dirty"
 }
 
 _pkg_version_segment() {
@@ -22,14 +22,14 @@ _pkg_version_segment() {
     fi
     version=$(grep -m1 '"version"' "$file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9._-]*')
     [ -z "$version" ] && return
-    echo " %{$'\e[38;5;108m'%}v$version%{$'\e[0m'%}"
+    echo " %F{108}v$version%f"
 }
 
 precmd() {
-    local time_seg="%{$'\e[38;5;244m'%}[%D{%Y-%m-%dT%H:%M:%S}]%{$'\e[0m'%}"
-    local host_seg="%{$'\e[38;5;110m'%}[%n@%m]%{$'\e[0m'%}"
-    local dir_seg="%{$'\e[38;5;73m'%}%~%{$'\e[0m'%}"
+    local time_seg="%F{244}[%D{%Y-%m-%dT%H:%M:%S}]%f"
+    local host_seg="%F{110}[%n@%m]%f"
+    local dir_seg="%F{73}%~%f"
     PROMPT="
 ${time_seg} ${host_seg} ${dir_seg}$(_git_segment)$(_pkg_version_segment)
-%{$'\e[38;5;108m'%}❯%{$'\e[0m'%} "
+%F{108}❯%f "
 }

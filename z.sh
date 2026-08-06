@@ -2,6 +2,8 @@
 export _Z_DATA="$HOME/.zdirs"
 touch "$_Z_DATA"
 
+unalias z 2>/dev/null # Evite les conflits avec d'autres implémentations de z
+
 _z_add() {
     local dir="$PWD"
     [ "$dir" = "$HOME" ] && return
