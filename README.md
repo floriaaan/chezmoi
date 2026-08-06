@@ -9,8 +9,10 @@ Built with zero-install constraint in mind: no ability to install packages (no s
 - **z.sh** — mini `z` jump command. Tracks visited dirs (`~/.zdirs`), ranks by frequency, `z <pattern>` cd to best match. Tab-completion included (bash + zsh via `bashcompinit`).
 - **prompt.sh** — powerlevel10k-style PS1 for bash, no nerd fonts. Shows time, user@host, cwd, git branch + dirty marker, package version (`package.json`/`composer.json`).
 - **prompt.zsh** — same prompt, zsh flavor (`precmd` + `PROMPT_SUBST`).
-- **git-aliases.sh** — short git aliases (`ga`, `gc`, `gp`, `gco`, `gcb`, `glog`, `gs`, `grh`, `gcp`, etc).
+- **git-aliases.sh** — short git aliases (`ga`, `gc`, `gp`, `gco`, `gcb`, `glog`, `gs`, `grh`, `gcp`, `gm`, `grb`, etc).
 - **gtag.sh** — `gtag` command: create/push semver git tags. Supports `major|minor|patch`, `--rc`, `--dev`, `--prefix=`, `--force`. No args shows tag tree (prod/rc/dev).
+- **completion.sh** — tab-completion for `gtag`/`chezmoi` subcommands + hooks git's own completion (if present on the machine) onto `gco`/`gcb`/`gb`/`gm`/`grb`.
+- **colors.sh** — `LS_COLORS`/`GREP_COLORS` + colored `ls`/`grep`/`diff` aliases (GNU/BSD auto-detected). Also auto-sources `zsh-syntax-highlighting`/`zsh-autosuggestions` under zsh if already installed on the machine (no install forced; opt out with `CHEZMOI_NO_ZSH_PLUGINS=1`).
 - **chezmoi.sh** — barrel: detects bash/zsh, sources common modules + right prompt file, daily update check against GitHub, `chezmoi update|version|help` commands.
 
 ## Install
@@ -36,6 +38,17 @@ gtag patch --rc     # tag+push new release candidate
 
 bash or zsh, git, curl (for update check).
 
+## Tests / CI
+
+Zero-dependency test harness in `test/` (no bats, no install needed):
+
+```bash
+bash test/run.sh
+zsh test/run.sh
+```
+
+CI (`.github/workflows/ci.yml`) runs `shellcheck` and the test suite under both shells on every push/PR.
+
 ## Version
 
-See `VERSION` file. Current: 1.2.3
+See `VERSION` file. Current: 1.3.0

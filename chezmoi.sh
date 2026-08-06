@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ## --- chezmoi: barrel file ---
 
-CHEZMOI_VERSION="1.2.3"
+CHEZMOI_VERSION="1.3.0"
 CHEZMOI_REPO="floriaaan/chezmoi"
 
 # Détection du chemin du script, compatible bash ET zsh
@@ -24,7 +24,7 @@ if [ -n "$ZSH_VERSION" ]; then
 fi
 
 ## --- Source des modules communs (bash + zsh) ---
-for _f in z git-aliases gtag; do
+for _f in z git-aliases gtag completion colors; do
     [ -f "$CHEZMOI_DIR/$_f.sh" ] && source "$CHEZMOI_DIR/$_f.sh"
 done
 unset _f
@@ -35,6 +35,9 @@ if [ -n "$ZSH_VERSION" ]; then
 else
     [ -f "$CHEZMOI_DIR/prompt.sh" ] && source "$CHEZMOI_DIR/prompt.sh"
 fi
+
+## --- Plugins zsh externes (syntax-highlighting/autosuggestions) : doit être sourcé en dernier ---
+[ -n "$ZSH_VERSION" ] && declare -f _chezmoi_load_zsh_syntax_plugins >/dev/null 2>&1 && _chezmoi_load_zsh_syntax_plugins
 
 ## --- Commande chezmoi ---
 chezmoi() {
@@ -95,9 +98,9 @@ _chezmoi_check_update() {
             printf "%b\n" "${_CHEZMOI_WARN}chezmoi: nouvelle version disponible (${remote_version}, actuelle: ${CHEZMOI_VERSION})${_CHEZMOI_RESET}" >&2
         fi
         echo "$now" > "$CHEZMOI_CACHE"
-    ) &disown 2>/dev/null
+    ) & disown 2>/dev/null
 }
-_chezmoi_check_update
+[ -z "$CHEZMOI_NO_UPDATE_CHECK" ] && _chezmoi_check_update
 
 ## --- Bannière de chargement ---
-printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET} chargé"
+[ -z "$CHEZMOI_NO_BANNER" ] && printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET} chargé"

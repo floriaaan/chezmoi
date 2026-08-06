@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          # prompt.zsh exclu : syntaxe zsh pure (%F{}, add-zsh-hook), pas une cible shellcheck.
+          # -S error : la dette de warnings pré-existante (gtag.sh notamment) reste visible
+          # mais ne bloque pas ce changeset ; les erreurs réelles font toujours échouer le job.
+          shellcheck -S error -s bash chezmoi.sh git-aliases.sh gtag.sh z.sh completion.sh colors.sh test/*.sh
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shell: [bash, zsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: install zsh
+        if: matrix.shell == 'zsh'
+        run: sudo apt-get update && sudo apt-get install -y zsh
+      - name: run tests
+        run: ${{ matrix.shell }} test/run.sh
