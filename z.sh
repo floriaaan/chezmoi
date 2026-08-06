@@ -2,7 +2,7 @@
 export _Z_DATA="$HOME/.zdirs"
 touch "$_Z_DATA"
 
-unalias z 2>/dev/null # Evite les conflits avec d'autres implémentations de z
+unalias z 2>/dev/null   # évite un conflit si un alias 'z' existe déjà (zsh)
 
 _z_add() {
     local dir="$PWD"
@@ -12,6 +12,7 @@ _z_add() {
     tmp=$(mktemp)
     while IFS='|' read -r path rank time; do
         [ -z "$path" ] && continue
+        [ ! -d "$path" ] && continue   # purge les dossiers supprimés
         if [ "$path" = "$dir" ]; then
             rank=$((rank + 1))
             time=$now
@@ -26,10 +27,25 @@ _z_add() {
 
 z() {
     if [ -z "$1" ]; then cd "$HOME" || return; return; fi
+    if [ "$1" = "-l" ]; then
+        _z_list
+        return
+    fi
     if [ -d "$1" ]; then cd "$1" || return; return; fi
     local best
-    best=$(awk -F'|' -v pat="$1" '
-        $1 ~ pat { score = $2 + 0; if (score > max) { max = score; best = $1 } }
+    best=$(awk -F'|' -v pat="$1" -v now="$(date +%s)" '
+        function frecency(rank, t,    age, mult) {
+            age = now - t
+            if (age < 3600) mult = 4
+            else if (age < 86400) mult = 2
+            else if (age < 604800) mult = 0.5
+            else mult = 0.25
+            return rank * mult
+        }
+        $1 ~ pat {
+            score = frecency($2 + 0, $3 + 0)
+            if (score > max) { max = score; best = $1 }
+        }
         END { print best }
     ' "$_Z_DATA")
     if [ -n "$best" ] && [ -d "$best" ]; then
@@ -38,6 +54,20 @@ z() {
         echo "z: aucun dossier trouvé pour '$1'" >&2
         return 1
     fi
+}
+
+_z_list() {
+    awk -F'|' -v now="$(date +%s)" '
+        function frecency(rank, t,    age, mult) {
+            age = now - t
+            if (age < 3600) mult = 4
+            else if (age < 86400) mult = 2
+            else if (age < 604800) mult = 0.5
+            else mult = 0.25
+            return rank * mult
+        }
+        { score = frecency($2 + 0, $3 + 0); printf "%.1f\t%s\n", score, $1 }
+    ' "$_Z_DATA" | sort -rn | head -n 30
 }
 
 ## --- Autocomplétion pour z ---
