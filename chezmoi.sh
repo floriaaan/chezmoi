@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 ## --- chezmoi: barrel file ---
 
-CHEZMOI_VERSION="1.0.0"
+CHEZMOI_VERSION="1.1.0"
 CHEZMOI_REPO="floriaaan/chezmoi"
-CHEZMOI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Détection du chemin du script, compatible bash ET zsh
+_chezmoi_self="${BASH_SOURCE[0]:-$0}"
+CHEZMOI_DIR="$(cd "$(dirname "$_chezmoi_self")" && pwd)"
+unset _chezmoi_self
+
 CHEZMOI_CACHE="$HOME/.cache/chezmoi_last_check"
 
 # Couleurs
@@ -12,34 +17,24 @@ _CHEZMOI_WARN='\033[38;5;179m'
 _CHEZMOI_INFO='\033[38;5;110m'
 _CHEZMOI_RESET='\033[0m'
 
-## --- Source des modules ---
-for _f in z prompt git-aliases gtag; do
+## --- Activation de la compat "complete" bash sous zsh (pour l'autocomplétion de z) ---
+if [ -n "$ZSH_VERSION" ]; then
+    autoload -Uz compinit && compinit -u
+    autoload -Uz bashcompinit && bashcompinit
+fi
+
+## --- Source des modules communs (bash + zsh) ---
+for _f in z git-aliases gtag; do
     [ -f "$CHEZMOI_DIR/$_f.sh" ] && source "$CHEZMOI_DIR/$_f.sh"
 done
 unset _f
 
-## --- Vérification de version (async, non bloquant) ---
-_chezmoi_check_update() {
-    mkdir -p "$(dirname "$CHEZMOI_CACHE")"
-    local now last_check
-    now=$(date +%s)
-    last_check=$(cat "$CHEZMOI_CACHE" 2>/dev/null || echo 0)
-
-    # ne vérifie qu'une fois par 24h pour ne pas ralentir l'ouverture du shell
-    [ $((now - last_check)) -lt 86400 ] && return
-
-    (
-        local remote_version
-        remote_version=$(curl -fsSL --max-time 1 \
-            "https://raw.githubusercontent.com/${CHEZMOI_REPO}/main/VERSION" 2>/dev/null)
-        if [ -n "$remote_version" ] && [ "$remote_version" != "$CHEZMOI_VERSION" ]; then
-            printf "%b\n" "${_CHEZMOI_WARN}chezmoi: nouvelle version disponible (${remote_version}, actuelle: ${CHEZMOI_VERSION})${_CHEZMOI_RESET}" >&2
-        fi
-        echo "$now" > "$CHEZMOI_CACHE"
-    ) &disown 2>/dev/null
-}
-
-_chezmoi_check_update
+## --- Prompt : fichier différent selon le shell ---
+if [ -n "$ZSH_VERSION" ]; then
+    [ -f "$CHEZMOI_DIR/prompt.zsh" ] && source "$CHEZMOI_DIR/prompt.zsh"
+else
+    [ -f "$CHEZMOI_DIR/prompt.sh" ] && source "$CHEZMOI_DIR/prompt.sh"
+fi
 
 ## --- Commande chezmoi ---
 chezmoi() {
@@ -49,27 +44,19 @@ chezmoi() {
                 printf "%b\n" "${_CHEZMOI_WARN}chezmoi: '$CHEZMOI_DIR' n'est pas un dépôt git, impossible de mettre à jour${_CHEZMOI_RESET}" >&2
                 return 1
             fi
-
             printf "%b\n" "${_CHEZMOI_INFO}chezmoi: mise à jour en cours...${_CHEZMOI_RESET}"
-
             local before after
             before=$(git -C "$CHEZMOI_DIR" rev-parse HEAD 2>/dev/null)
-
             if ! git -C "$CHEZMOI_DIR" pull --ff-only origin main; then
                 printf "%b\n" "${_CHEZMOI_WARN}chezmoi: échec du pull (conflits locaux ?)${_CHEZMOI_RESET}" >&2
                 return 1
             fi
-
             after=$(git -C "$CHEZMOI_DIR" rev-parse HEAD 2>/dev/null)
-
             if [ "$before" = "$after" ]; then
                 printf "%b\n" "${_CHEZMOI_OK}chezmoi: déjà à jour${_CHEZMOI_RESET}"
                 return 0
             fi
-
-            # met à jour le cache pour éviter un check immédiat après le pull
             date +%s > "$CHEZMOI_CACHE"
-
             printf "%b\n" "${_CHEZMOI_OK}chezmoi: mis à jour, rechargement...${_CHEZMOI_RESET}"
             source "$CHEZMOI_DIR/chezmoi.sh"
             ;;
@@ -78,7 +65,7 @@ chezmoi() {
             ;;
         ""|help|-h|--help)
             cat <<EOF
-chezmoi - gestion de la config bash perso
+chezmoi - gestion de la config shell perso
 
 Usage:
   chezmoi update     met à jour les fichiers depuis origin/main et recharge
@@ -92,6 +79,25 @@ EOF
             ;;
     esac
 }
+
+## --- Vérification de version (async, non bloquant) ---
+_chezmoi_check_update() {
+    mkdir -p "$(dirname "$CHEZMOI_CACHE")"
+    local now last_check
+    now=$(date +%s)
+    last_check=$(cat "$CHEZMOI_CACHE" 2>/dev/null || echo 0)
+    [ $((now - last_check)) -lt 86400 ] && return
+    (
+        local remote_version
+        remote_version=$(curl -fsSL --max-time 1 \
+            "https://raw.githubusercontent.com/${CHEZMOI_REPO}/main/VERSION" 2>/dev/null)
+        if [ -n "$remote_version" ] && [ "$remote_version" != "$CHEZMOI_VERSION" ]; then
+            printf "%b\n" "${_CHEZMOI_WARN}chezmoi: nouvelle version disponible (${remote_version}, actuelle: ${CHEZMOI_VERSION})${_CHEZMOI_RESET}" >&2
+        fi
+        echo "$now" > "$CHEZMOI_CACHE"
+    ) &disown 2>/dev/null
+}
+_chezmoi_check_update
 
 ## --- Bannière de chargement ---
 printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET} chargé"
