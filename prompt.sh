@@ -1,5 +1,62 @@
 ## --- Prompt façon powerlevel10k (couleurs douces, sans nerd font) ---
 
+_PROMPT_PATH_MAXLEN=60
+
+## --- Repère SSH : testé une seule fois au chargement, $SSH_CONNECTION ne change pas pendant la session ---
+if [ -n "$SSH_CONNECTION" ] || [ -n "$SSH_TTY" ]; then
+    _CHEZMOI_IS_SSH=1
+else
+    _CHEZMOI_IS_SSH=0
+fi
+
+## Joint les N derniers éléments du tableau passé en argument avec "/"
+_prompt_join_last() {
+    local count="$1"; shift
+    local -a arr=("$@")
+    local total=${#arr[@]}
+    local start=$((total - count))
+    local out="" i
+    for ((i = start; i < total; i++)); do
+        out="${out:+$out/}${arr[$i]}"
+    done
+    printf '%s' "$out"
+}
+
+## Tronque un chemin par la gauche sur les séparateurs "/", en gardant au moins les 2 derniers segments
+_prompt_truncate_path() {
+    local full="$1"
+    if [ "${#full}" -le "$_PROMPT_PATH_MAXLEN" ]; then
+        printf '%s' "$full"
+        return
+    fi
+    local stripped="${full#\~}"
+    stripped="${stripped#/}"
+    local -a segs
+    IFS='/' read -ra segs <<< "$stripped"
+    local n=${#segs[@]}
+    if [ "$n" -le 2 ]; then
+        printf '…/%s' "$(_prompt_join_last "$n" "${segs[@]}")"
+        return
+    fi
+    local i candidate
+    for ((i = n; i >= 2; i--)); do
+        candidate="…/$(_prompt_join_last "$i" "${segs[@]}")"
+        if [ "${#candidate}" -le "$_PROMPT_PATH_MAXLEN" ] || [ "$i" -eq 2 ]; then
+            printf '%s' "$candidate"
+            return
+        fi
+    done
+}
+
+_prompt_path_segment() {
+    local full="$PWD"
+    case "$full" in
+        "$HOME") full="~" ;;
+        "$HOME"/*) full="~${full#"$HOME"}" ;;
+    esac
+    _prompt_truncate_path "$full"
+}
+
 _GIT_CACHE_TTL=5
 _git_cache_time=0
 _git_cache_pwd=""
@@ -84,8 +141,15 @@ _duration_segment() {
 
 _build_ps1() {
     local time_seg="\[\033[38;5;244m\][\D{%Y-%m-%dT%H:%M:%S}]\[\033[0m\]"
-    local host_seg="\[\033[38;5;110m\][\u@\h]\[\033[0m\]"
-    local dir_seg="\[\033[38;5;73m\]\w\[\033[0m\]"
+    local host_color=110 ssh_seg=""
+    if [ "$_CHEZMOI_IS_SSH" = "1" ]; then
+        host_color=208
+        ssh_seg="\[\033[38;5;208m\][ssh]\[\033[0m\] "
+    fi
+    local host_seg="${ssh_seg}\[\033[38;5;${host_color}m\][\u@\h]\[\033[0m\]"
+    local path_txt
+    path_txt="$(_prompt_path_segment)"
+    local dir_seg="\[\033[38;5;73m\]${path_txt}\[\033[0m\]"
     PS1="\n${time_seg} ${host_seg} ${dir_seg}$(_git_segment)$(_pkg_version_segment)$(_duration_segment)\n\[\033[38;5;108m\]❯\[\033[0m\] "
 }
 
