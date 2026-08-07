@@ -13,7 +13,8 @@ _GTAG_TREE_LIMIT=4   # nombre de tags affichés par environnement dans l'arbre (
 _gtag_confirm() {
     emulate -L bash 2>/dev/null
     local msg="$1" answer
-    read -rp "$(printf "%b" "${_GTAG_INFO}${msg}${_GTAG_RESET} [y/N] ")" answer
+    printf "%b" "${_GTAG_INFO}${msg}${_GTAG_RESET} [y/N] "
+    read -r answer
     [[ "$answer" =~ ^[yY]$ ]]
 }
 
