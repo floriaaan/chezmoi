@@ -67,4 +67,4 @@ CI (`.github/workflows/ci.yml`) runs `shellcheck` and the test suite under both 
 
 ## Version
 
-See `VERSION` file. Current: 1.4.0
+See `VERSION` file. Current: 1.4.1

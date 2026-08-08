@@ -7,7 +7,7 @@ source "$_test_repo_dir/chezmoi.sh"
 test_chezmoi_version() {
     local out
     out=$(chezmoi version)
-    assert_match "1\.4\.0" "$out" "chezmoi version affiche 1.4.0"
+    assert_match "$CHEZMOI_VERSION" "$out" "chezmoi version affiche CHEZMOI_VERSION"
 }
 
 test_chezmoi_help() {

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.1
+- fix: `prompt.sh`/`z.sh` — `PROMPT_COMMAND` prepend was unconditional (no dedupe guard, unlike `history.sh`) ; un re-source de `chezmoi.sh` (ex: `chezmoi update`) dupliquait `_build_ps1`/`_z_add` et laissait un `;` orphelin, cassant `PROMPT_COMMAND` (`syntax error near unexpected token ';;'`). Fix : même garde idempotente que `history.sh` sur les deux fichiers.
+
 ## 1.4.0
 - feat: `history.sh` — historique partagé/dédupliqué/timestampé, écriture immédiate (synchro temps réel entre terminaux), recherche par préfixe sur ↑/↓ (bash + zsh, deux variantes de séquence de touches)
 - feat: `ports.sh` — `ports [PORT|PATTERN]` (via `ss`, fallback `netstat`), `kport <PORT> [--force]` avec confirmation et garde-fous (refuse PID 1 / process d'un autre utilisateur)

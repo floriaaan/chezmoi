@@ -153,4 +153,8 @@ _build_ps1() {
     PS1="\n${time_seg} ${host_seg} ${dir_seg}$(_git_segment)$(_pkg_version_segment)$(_duration_segment)\n\[\033[38;5;108m\]❯\[\033[0m\] "
 }
 
-PROMPT_COMMAND="_build_ps1;${PROMPT_COMMAND}"
+## Idempotent : évite doublons/`;;` si chezmoi.sh est re-sourcé (ex: `chezmoi update`).
+case ";${PROMPT_COMMAND};" in
+    *";_build_ps1;"*) ;;
+    *) PROMPT_COMMAND="_build_ps1${PROMPT_COMMAND:+;}${PROMPT_COMMAND}" ;;
+esac
