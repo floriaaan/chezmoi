@@ -81,4 +81,8 @@ _z_complete() {
 }
 complete -F _z_complete z
 
-PROMPT_COMMAND="_z_add;${PROMPT_COMMAND}"
+## Idempotent : évite doublons/`;;` si chezmoi.sh est re-sourcé (ex: `chezmoi update`).
+case ";${PROMPT_COMMAND};" in
+    *";_z_add;"*) ;;
+    *) PROMPT_COMMAND="_z_add${PROMPT_COMMAND:+;}${PROMPT_COMMAND}" ;;
+esac
