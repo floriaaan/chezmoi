@@ -55,3 +55,106 @@ test_prompt_ssh_marker_on_remote() {
         assert_eq "1" "$_CHEZMOI_IS_SSH" "repère SSH actif quand SSH_CONNECTION est défini"
     )
 }
+
+_prompt_render() {
+    if [ -n "$ZSH_VERSION" ]; then
+        _chezmoi_precmd
+        printf '%s' "$PROMPT"
+    else
+        _build_ps1
+        printf '%s' "$PS1"
+    fi
+}
+
+test_prompt_theme_default_has_time_segment() {
+    (
+        CHEZMOI_PROMPT_THEME=default
+        local out
+        out=$(_prompt_render)
+        assert_match 'D\{' "$out" "thème default: le prompt contient un segment heure"
+    )
+}
+
+test_prompt_theme_minimal_has_no_time_segment() {
+    (
+        CHEZMOI_PROMPT_THEME=minimal
+        local out
+        out=$(_prompt_render)
+        assert_not_match 'D\{' "$out" "thème minimal: pas de segment heure (1 ligne, compact)"
+    )
+}
+
+test_prompt_theme_unknown_falls_back_to_default() {
+    (
+        CHEZMOI_PROMPT_THEME=bogus
+        local out
+        out=$(_prompt_render)
+        assert_match 'D\{' "$out" "thème inconnu -> fallback silencieux sur default"
+    )
+}
+
+test_prompt_theme_agnoster_has_no_time_segment_but_has_separator() {
+    (
+        CHEZMOI_PROMPT_THEME=agnoster
+        local out
+        out=$(_prompt_render)
+        assert_not_match 'D\{' "$out" "thème agnoster: pas de segment heure"
+        assert_match '▶' "$out" "thème agnoster: contient le séparateur de segment ▶"
+    )
+}
+
+test_agnoster_context_hidden_locally_non_root() {
+    (
+        if [ "${EUID:-1000}" -eq 0 ]; then
+            printf "%b\n" "${_TEST_OK}ok${_TEST_RESET} (root, test sauté)"
+            return 0
+        fi
+        _CHEZMOI_IS_SSH=0
+        local out
+        out=$(_agnoster_context_segment)
+        assert_eq "" "$out" "contexte masqué en local (non-ssh, non-root), comme le vrai agnoster"
+    )
+}
+
+test_agnoster_context_shown_over_ssh() {
+    (
+        _CHEZMOI_IS_SSH=1
+        local out
+        out=$(_agnoster_context_segment)
+        assert_match '▶' "$out" "contexte affiché en session ssh"
+    )
+}
+
+test_agnoster_dir_segment_always_shown() {
+    local out
+    out=$(_agnoster_dir_segment)
+    assert_match '▶' "$out" "le segment chemin est toujours affiché"
+}
+
+test_agnoster_status_segment_hidden_on_success() {
+    local out
+    out=$(_agnoster_status_segment 0)
+    assert_eq "" "$out" "pas de segment statut quand la commande précédente a réussi"
+}
+
+test_agnoster_status_segment_shown_on_failure() {
+    local out
+    out=$(_agnoster_status_segment 1)
+    assert_match '✘ 1' "$out" "segment statut affiché avec le code de sortie en cas d'échec"
+}
+
+test_git_segment_minimal_shows_branch_no_ahead_behind() {
+    (
+        local tmp branch out
+        tmp=$(mktemp -d)
+        cd "$tmp" || exit 1
+        git init -q
+        git config user.email "test@test.local"
+        git config user.name "test"
+        git commit -q --allow-empty -m "init"
+        branch=$(git symbolic-ref --short HEAD)
+        out=$(_git_segment_minimal)
+        assert_match "$branch" "$out" "segment git minimal affiche la branche"
+        assert_not_match "↑" "$out" "segment git minimal n'affiche pas ahead/behind"
+    )
+}

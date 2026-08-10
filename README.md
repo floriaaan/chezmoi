@@ -6,20 +6,21 @@ Built with zero-install constraint in mind: no ability to install packages (no s
 
 ## Modules
 
-Ordre de chargement (barrel `chezmoi.sh`) : `history → z → git-aliases → gtag → ports → extract → ssh → completion → colors → prompt(.sh|.zsh)`.
+Ordre de chargement (barrel `chezmoi.sh`) : `config → history → z → git-aliases → gtag → ports → extract → ssh → completion → colors → prompt(.sh|.zsh)`.
 
+- **config.sh** — `chezmoi config` : préférences persistantes (`~/.config/chezmoi/config`, ou `$XDG_CONFIG_HOME/chezmoi/config`). Sourcé en premier pour que `ssh.sh`/`prompt.sh`/`prompt.zsh` lisent la valeur dès le démarrage. Clés connues : `prompt.theme` (`default`/`minimal`/`agnoster`, cf. `prompt.sh`), `ssh.modules` (modules embarqués par le wrapper ssh, défaut `"prompt git-aliases gtag"`). `chezmoi config set` persiste et applique tout de suite (pas besoin de relancer le shell) ; `chezmoi config set <clé>` sans valeur liste les choix possibles pour une clé à choix fermé (le choix actif est marqué) au lieu d'échouer — pour `prompt.theme`, chaque choix est accompagné d'un aperçu coloré de son rendu.
 - **history.sh** — historique partagé, dédupliqué (`erasedups`/`HIST_IGNORE_ALL_DUPS`), avec timestamps, écrit immédiatement (synchro temps réel entre terminaux). Ignore les commandes préfixées d'un espace et les commandes triviales (`ls`, `cd`, `pwd`, `exit`, `clear`, `history`). Recherche par préfixe sur ↑/↓ (bindings `\e[A`/`\eOA` etc, les deux variantes de séquence selon le mode du terminal).
 - **z.sh** — mini `z` jump command. Tracks visited dirs (`~/.zdirs`), ranks by frequency, `z <pattern>` cd to best match. Tab-completion included (bash + zsh via `bashcompinit`).
-- **prompt.sh** — powerlevel10k-style PS1 for bash, no nerd fonts. Shows time, user@host, cwd (troncature intelligente sur segments entiers, `_PROMPT_PATH_MAXLEN=60`), git branch + dirty marker, package version (`package.json`/`composer.json`). Repère `[ssh]` orange en session distante.
-- **prompt.zsh** — same prompt, zsh flavor (`precmd` + `PROMPT_SUBST`).
+- **prompt.sh** — powerlevel10k-style PS1 for bash, no nerd fonts, three themes selectable via `chezmoi config set prompt.theme <default|minimal|agnoster>`: `default` shows time, user@host, cwd (troncature intelligente sur segments entiers, `_PROMPT_PATH_MAXLEN=60`), git branch + dirty marker + ahead/behind, package version (`package.json`/`composer.json`), command duration if >=3s ; `minimal` is a single line, cwd + compact git only ; `agnoster` is an oh-my-zsh "agnoster"-equivalent (full-color segment blocks — context/dir/git/exit status — each closed by a `▶`, no powerline/nerd font needed). Repère `[ssh]` orange en session distante (les trois thèmes).
+- **prompt.zsh** — same prompt + themes, zsh flavor (`precmd` + `PROMPT_SUBST`).
 - **git-aliases.sh** — short git aliases (`ga`, `gc`, `gp`, `gco`, `gcb`, `glog`, `gs`, `grh`, `gcp`, `gm`, `grb`, etc).
-- **gtag.sh** — `gtag` command: create/push semver git tags. Supports `major|minor|patch`, `--rc`, `--dev`, `--prefix=`, `--force`. No args shows tag tree (prod/rc/dev).
+- **gtag.sh** — `gtag` command: create/push semver git tags. Supports `major|minor|patch`, `--rc`, `--dev`, `--prefix=`, `--force`. No args shows tag tree (prod/rc/dev). Branch guard: `--rc` expects branch `staging`, everything else (prod, `--dev`) expects `main`/`master` ; confirmations default to yes (`[Y/n]`, Enter = oui).
 - **ports.sh** — `ports [PORT|PATTERN]` liste les sockets en écoute (TCP+UDP), via `ss` (fallback `netstat`). `kport <PORT> [--force]` tue le process associé, avec confirmation (refuse PID 1 et les process d'un autre utilisateur, sauf root).
 - **extract.sh** — `extract <archive> [dest]` décompresse selon l'extension (`.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst`, `.tar`, `.gz`, `.bz2`, `.xz`, `.zip`, `.7z`, `.rar`), avec protection anti-tarbomb (propose un dossier dédié si l'archive a plusieurs entrées racine). `compress <dest.ext> <fichiers...>` fait l'inverse.
-- **ssh.sh** — wrapper `ssh` qui embarque `prompt`/`git-aliases`/`gtag` sur l'hôte distant sans rien y écrire (config base64 embarquée en littéral dans la commande distante exécutée par ssh — pas de variable d'env, donc aucune dépendance à `AcceptEnv`/`SetEnv` côté serveur, ni à un client OpenSSH récent). Fallback automatique et silencieux vers une session `ssh` normale si l'injection échoue pour n'importe quelle raison (charge trop grosse, `base64` absent côté distant, commande forcée par le serveur, etc). Résultat mis en cache par hôte (`~/.cache/chezmoi_ssh_hosts`, `_SSH_CHEZMOI_CACHE_TTL=86400`) pour ne pas retenter/avertir à chaque connexion vers un hôte déjà connu incompatible. `command ssh`/`ssh-raw` pour contourner. `ssh-chezmoi-test <host>` diagnostique la config sans ouvrir de session (et rafraîchit le cache).
+- **ssh.sh** — wrapper `ssh` qui embarque `prompt`/`git-aliases`/`gtag` sur l'hôte distant sans rien y écrire (config base64 embarquée en littéral dans la commande distante exécutée par ssh — pas de variable d'env, donc aucune dépendance à `AcceptEnv`/`SetEnv` côté serveur, ni à un client OpenSSH récent). Le module `prompt` n'embarque que le rendu du thème actif (`prompt.theme`, imposé en littéral pour l'hôte distant), pas les autres thèmes — allège la charge utile. Fallback automatique et silencieux vers une session `ssh` normale si l'injection échoue pour n'importe quelle raison (charge trop grosse, `base64` absent côté distant, commande forcée par le serveur, etc). Résultat mis en cache par hôte (`~/.cache/chezmoi_ssh_hosts`, `_SSH_CHEZMOI_CACHE_TTL=86400`) pour ne pas retenter/avertir à chaque connexion vers un hôte déjà connu incompatible. `command ssh`/`ssh-raw` pour contourner. `ssh-chezmoi-test <host>` diagnostique la config sans ouvrir de session (et rafraîchit le cache).
 - **completion.sh** — tab-completion for `gtag`/`chezmoi` subcommands + hooks git's own completion (if present on the machine) onto `gco`/`gcb`/`gb`/`gm`/`grb`.
 - **colors.sh** — `LS_COLORS`/`GREP_COLORS` + colored `ls`/`grep`/`diff` aliases (GNU/BSD auto-detected). Also auto-sources `zsh-syntax-highlighting`/`zsh-autosuggestions` under zsh if already installed on the machine (no install forced; opt out with `CHEZMOI_NO_ZSH_PLUGINS=1`).
-- **chezmoi.sh** — barrel: detects bash/zsh, sources common modules + right prompt file, daily update check against GitHub, `chezmoi update|version|doctor|help` commands. `CHEZMOI_REMOTE=1` (posé par `ssh.sh` côté distant) désactive le check de version et l'écriture de cache.
+- **chezmoi.sh** — barrel: detects bash/zsh, sources common modules + right prompt file, daily update check against GitHub, `chezmoi update|version|doctor|config|help` commands. `CHEZMOI_REMOTE=1` (posé par `ssh.sh` côté distant) désactive le check de version et l'écriture de cache.
 
 ## Install
 
@@ -35,6 +36,10 @@ source /path/to/chezmoi.sh
 chezmoi version   # show installed version
 chezmoi update    # git pull origin main, reload
 chezmoi doctor    # check dependencies/modules
+chezmoi config                          # list preferences (prompt theme, ssh modules) and current values
+chezmoi config set ssh.modules "prompt gtag"   # persisted + applied immediately
+chezmoi config set prompt.theme minimal        # switch to the 1-line prompt, persisted + applied on the very next prompt
+chezmoi config set prompt.theme                # no value: lists the available themes (active one marked)
 chezmoi help       # usage
 
 z <pattern>        # jump to frequent dir matching pattern
@@ -67,4 +72,4 @@ CI (`.github/workflows/ci.yml`) runs `shellcheck` and the test suite under both 
 
 ## Version
 
-See `VERSION` file. Current: 1.4.1
+See `VERSION` file. Current: 1.5.0

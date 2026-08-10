@@ -13,9 +13,9 @@ _GTAG_TREE_LIMIT=4   # nombre de tags affichés par environnement dans l'arbre (
 _gtag_confirm() {
     emulate -L bash 2>/dev/null
     local msg="$1" answer
-    printf "%b" "${_GTAG_INFO}${msg}${_GTAG_RESET} [y/N] "
+    printf "%b" "${_GTAG_INFO}${msg}${_GTAG_RESET} [Y/n] "
     read -r answer
-    [[ "$answer" =~ ^[yY]$ ]]
+    [[ -z "$answer" || "$answer" =~ ^[yY]$ ]]
 }
 
 _gtag_tree() {
@@ -170,9 +170,19 @@ gtag() {
         return 0
     fi
 
+    ## Garde-fou de branche : --rc cible la recette, qui se tague depuis 'staging' ; sans --rc
+    ## (prod ou --dev), c'est 'main'/'master' qui est attendu.
     local current_branch
     current_branch=$(git symbolic-ref --short HEAD 2>/dev/null)
-    if [ -n "$current_branch" ] && [[ ! "$current_branch" =~ ^(main|master)$ ]]; then
+    if [ "$rc" -eq 1 ]; then
+        if [ -n "$current_branch" ] && [ "$current_branch" != "staging" ]; then
+            printf "%b\n" "${_GTAG_WARN}gtag: tu es sur la branche '${current_branch}' (pas staging)${_GTAG_RESET}"
+            if ! _gtag_confirm "Continuer quand même ?"; then
+                printf "%b\n" "${_GTAG_ERR}gtag: annulé${_GTAG_RESET}"
+                return 1
+            fi
+        fi
+    elif [ -n "$current_branch" ] && [[ ! "$current_branch" =~ ^(main|master)$ ]]; then
         printf "%b\n" "${_GTAG_WARN}gtag: tu es sur la branche '${current_branch}' (pas main/master)${_GTAG_RESET}"
         if ! _gtag_confirm "Continuer quand même ?"; then
             printf "%b\n" "${_GTAG_ERR}gtag: annulé${_GTAG_RESET}"

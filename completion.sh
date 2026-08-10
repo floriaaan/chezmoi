@@ -23,9 +23,38 @@ complete -F _gtag_complete gtag
 
 _chezmoi_complete() {
     emulate -L bash 2>/dev/null
-    local cur
+    local cur prev
     cur="${COMP_WORDS[COMP_CWORD]}"
-    COMPREPLY=($(compgen -W "update version doctor help" -- "$cur"))
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [ "${COMP_WORDS[1]}" = "config" ]; then
+        if [ "$COMP_CWORD" -eq 2 ]; then
+            COMPREPLY=($(compgen -W "get set unset list help" -- "$cur"))
+            return
+        fi
+        if [ "$COMP_CWORD" -eq 3 ] && { [ "$prev" = "get" ] || [ "$prev" = "set" ] || [ "$prev" = "unset" ]; }; then
+            COMPREPLY=($(compgen -W "prompt.theme ssh.modules" -- "$cur"))
+            return
+        fi
+        ## Valeurs possibles pour "chezmoi config set prompt.theme <TAB>" (réutilise le registre de
+        ## config.sh s'il est chargé, sinon liste de secours).
+        if [ "$COMP_CWORD" -eq 4 ] && [ "${COMP_WORDS[2]}" = "set" ] && [ "${COMP_WORDS[3]}" = "prompt.theme" ]; then
+            local choices
+            if declare -f _chezmoi_config_choices >/dev/null 2>&1; then
+                choices="$(_chezmoi_config_choices prompt.theme)"
+            else
+                choices="default minimal agnoster"
+            fi
+            COMPREPLY=($(compgen -W "$choices" -- "$cur"))
+            return
+        fi
+        return
+    fi
+
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=($(compgen -W "update version doctor config help" -- "$cur"))
+        return
+    fi
 }
 complete -F _chezmoi_complete chezmoi
 

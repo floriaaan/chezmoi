@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ## --- chezmoi: barrel file ---
 
-CHEZMOI_VERSION="1.4.1"
+CHEZMOI_VERSION="1.5.0"
 CHEZMOI_REPO="floriaaan/chezmoi"
 
 # Détection du chemin du script, compatible bash ET zsh
@@ -25,9 +25,10 @@ if [ -n "$ZSH_VERSION" ]; then
 fi
 
 ## --- Source des modules communs (bash + zsh) ---
-## history en premier : certaines options d'historique doivent être posées tôt.
+## config en premier : ssh.sh (modules embarqués) et prompt.sh/.zsh (thème) lisent les valeurs
+## qu'il pose. history ensuite : certaines options d'historique doivent être posées tôt.
 ## completion/colors restent en toute fin, juste avant le prompt (comportement inchangé depuis 1.3.0).
-for _f in history z git-aliases gtag ports extract ssh completion colors; do
+for _f in config history z git-aliases gtag ports extract ssh completion colors; do
     [ -f "$CHEZMOI_DIR/$_f.sh" ] && source "$CHEZMOI_DIR/$_f.sh"
 done
 unset _f
@@ -76,6 +77,10 @@ chezmoi() {
         doctor)
             _chezmoi_doctor
             ;;
+        config)
+            shift
+            _chezmoi_config_cmd "$@"
+            ;;
         ""|help|-h|--help)
             cat <<EOF
 chezmoi - gestion de la config shell perso
@@ -84,6 +89,7 @@ Usage:
   chezmoi update     met à jour les fichiers depuis origin/main et recharge
   chezmoi version    affiche la version installée
   chezmoi doctor     vérifie les dépendances et l'état des modules
+  chezmoi config     préférences persistantes (thème du prompt, modules ssh) ; 'chezmoi config help' pour le détail
   chezmoi help       affiche cette aide
 EOF
             ;;
@@ -140,6 +146,9 @@ _chezmoi_doctor() {
 
     declare -f ssh >/dev/null 2>&1 && ok=1 || ok=0
     _chezmoi_doctor_check "module ssh chargé" "$ok"
+
+    declare -f _chezmoi_config_cmd >/dev/null 2>&1 && ok=1 || ok=0
+    _chezmoi_doctor_check "module config chargé" "$ok"
 
     if [ -n "$CHEZMOI_REMOTE" ]; then
         printf "%b\n" "  ${_CHEZMOI_INFO}ℹ${_CHEZMOI_RESET} CHEZMOI_REMOTE actif — session distante (injectée via ssh)"
