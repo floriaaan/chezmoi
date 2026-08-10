@@ -12,7 +12,10 @@
 ## guillemets simples est sûr quel que soit son contenu.
 
 _SSH_CHEZMOI_ENABLED=1
-_SSH_CHEZMOI_MODULES="prompt git-aliases gtag"
+## Défaut si non déjà posé par config.sh (source config -> ssh dans le barrel ; ex: "chezmoi config
+## set ssh.modules ...") — préserve la compat des tests qui sourcent ssh.sh seul ou surchargent la
+## variable directement après le source.
+_SSH_CHEZMOI_MODULES="${_SSH_CHEZMOI_MODULES:-prompt git-aliases gtag}"
 _SSH_CHEZMOI_MAXSIZE=32768
 _SSH_CHEZMOI_SHELL="bash"
 _SSH_CHEZMOI_CACHE_FILE="$HOME/.cache/chezmoi_ssh_hosts"
@@ -91,10 +94,26 @@ _ssh_cache_set() {
     mv "$tmp" "$_SSH_CHEZMOI_CACHE_FILE"
 }
 
-## Concatène le contenu des modules listés dans _SSH_CHEZMOI_MODULES (prompt -> variante shell distant)
+## Ne garde, dans le contenu d'un fichier prompt.sh/.zsh, que le code commun + celui du thème
+## demandé : le fichier local délimite chaque thème entre "## chezmoi:theme-begin <nom>" et
+## "## chezmoi:theme-end <nom>" (cf. prompt.sh/prompt.zsh) précisément pour permettre ce filtrage ;
+## le rendu des thèmes non sélectionnés n'a aucune utilité côté distant et ne fait qu'alourdir la
+## charge utile embarquée dans la commande ssh.
+_ssh_prompt_filter_theme() {
+    emulate -L bash 2>/dev/null
+    local file="$1" theme="$2"
+    awk -v theme="$theme" '
+        /^## chezmoi:theme-begin / { skip = ($3 != theme); next }
+        /^## chezmoi:theme-end /   { skip = 0; next }
+        !skip
+    ' "$file"
+}
+
+## Concatène le contenu des modules listés dans _SSH_CHEZMOI_MODULES (prompt -> variante shell
+## distant, filtrée sur le thème actif via _ssh_prompt_filter_theme)
 _ssh_build_payload() {
     emulate -L bash 2>/dev/null
-    local mod file payload=""
+    local mod file theme payload=""
     for mod in $_SSH_CHEZMOI_MODULES; do
         if [ "$mod" = "prompt" ]; then
             if [ "$_SSH_CHEZMOI_SHELL" = "zsh" ]; then
@@ -102,9 +121,17 @@ _ssh_build_payload() {
             else
                 file="$CHEZMOI_DIR/prompt.sh"
             fi
-        else
-            file="$CHEZMOI_DIR/$mod.sh"
+            [ -f "$file" ] || continue
+            theme="${CHEZMOI_PROMPT_THEME:-default}"
+            case "$theme" in *"'"*) theme="default" ;; esac
+            ## Le thème est imposé en dur (littéral) avant le fichier filtré : l'hôte distant n'a
+            ## pas accès à la config locale (pas de CHEZMOI_PROMPT_THEME dans l'environnement, cf.
+            ## note en tête de fichier sur AcceptEnv), et le fallback "${CHEZMOI_PROMPT_THEME:-default}"
+            ## du fichier lui-même ne s'applique que si la variable n'est pas déjà posée.
+            payload="${payload}CHEZMOI_PROMPT_THEME='${theme}'"$'\n'"$(_ssh_prompt_filter_theme "$file" "$theme")"$'\n'
+            continue
         fi
+        file="$CHEZMOI_DIR/$mod.sh"
         [ -f "$file" ] || continue
         payload="${payload}$(cat "$file")"$'\n'
     done

@@ -151,6 +151,59 @@ test_ssh_cache_expires_after_ttl() {
     )
 }
 
+test_ssh_prompt_filter_keeps_only_selected_theme() {
+    (
+        local out
+        out=$(_ssh_prompt_filter_theme "$_test_repo_dir/prompt.sh" minimal)
+        assert_match '_build_ps1_minimal\(\) \{' "$out" "filtre thème minimal: garde _build_ps1_minimal"
+        assert_not_match '_build_ps1_default\(\) \{' "$out" "filtre thème minimal: retire la définition de _build_ps1_default"
+    )
+}
+
+test_ssh_build_payload_prompt_respects_theme() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        CHEZMOI_PROMPT_THEME="minimal"
+        local out
+        out=$(_ssh_build_payload)
+        assert_match "_build_ps1_minimal\(\) \{" "$out" "payload ssh prompt=minimal: contient le rendu minimal"
+        assert_not_match "_build_ps1_default\(\) \{" "$out" "payload ssh prompt=minimal: n'embarque pas le rendu default (charge utile allégée)"
+    )
+}
+
+test_ssh_build_payload_prompt_forces_theme_literal() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        CHEZMOI_PROMPT_THEME="minimal"
+        local out
+        out=$(_ssh_build_payload)
+        assert_match "CHEZMOI_PROMPT_THEME='minimal'" "$out" "payload ssh: le thème actif est imposé en littéral (l'hôte distant n'a pas la config locale)"
+    )
+}
+
+test_ssh_build_payload_prompt_theme_reduces_size() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        local payload_minimal payload_default
+        CHEZMOI_PROMPT_THEME="minimal"
+        payload_minimal=$(_ssh_build_payload)
+        CHEZMOI_PROMPT_THEME="default"
+        payload_default=$(_ssh_build_payload)
+        assert_success "filtrer sur le thème actif réduit la charge utile ssh" \
+            -- test "${#payload_minimal}" -lt "${#payload_default}"
+    )
+}
+
+test_ssh_build_payload_prompt_theme_sanitizes_quote() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        CHEZMOI_PROMPT_THEME="a'b"
+        local out
+        out=$(_ssh_build_payload)
+        assert_match "CHEZMOI_PROMPT_THEME='default'" "$out" "une valeur de thème avec un guillemet simple retombe sur 'default' (pas d'injection dans le littéral)"
+    )
+}
+
 test_ssh_cache_disabled_with_zero_ttl() {
     (
         _SSH_CHEZMOI_CACHE_FILE=$(mktemp)

@@ -1,5 +1,19 @@
 ## --- Prompt façon powerlevel10k (couleurs douces, sans nerd font) ---
 
+## Thème du prompt (posé par config.sh depuis "chezmoi config set prompt.theme ..."). Thèmes
+## disponibles :
+##   default  2 lignes : heure, user@host, chemin, git (branche+dirty+ahead/behind), version de
+##            paquet, durée de la commande précédente si >=3s
+##   minimal  1 ligne : chemin + git compact (branche+dirty), rien d'autre
+## Valeur inconnue -> fallback silencieux sur "default" (cf. _build_ps1 plus bas).
+##
+## Les blocs "## chezmoi:theme-begin <nom>" / "## chezmoi:theme-end <nom>" ci-dessous délimitent
+## le code propre à chaque thème : ssh.sh (_ssh_build_payload) s'en sert pour n'embarquer sur
+## l'hôte distant que le code du thème réellement sélectionné (évite de surcharger la charge utile
+## avec le rendu des thèmes non utilisés). Ça ne change rien au chargement local, où les deux
+## thèmes restent chargés en même temps pour permettre un changement à chaud (cf. config.sh).
+CHEZMOI_PROMPT_THEME="${CHEZMOI_PROMPT_THEME:-default}"
+
 _PROMPT_PATH_MAXLEN=60
 
 ## --- Repère SSH : testé une seule fois au chargement, $SSH_CONNECTION ne change pas pendant la session ---
@@ -93,6 +107,7 @@ _git_refresh_cache() {
     fi
 }
 
+## chezmoi:theme-begin default
 _git_segment() {
     _git_refresh_cache
     [ -z "$_git_cache_branch" ] && return
@@ -139,7 +154,7 @@ _duration_segment() {
     echo " \[\033[38;5;244m\]took ${out}\[\033[0m\]"
 }
 
-_build_ps1() {
+_build_ps1_default() {
     local time_seg="\[\033[38;5;244m\][\D{%Y-%m-%dT%H:%M:%S}]\[\033[0m\]"
     local host_color=110 ssh_seg=""
     if [ "$_CHEZMOI_IS_SSH" = "1" ]; then
@@ -151,6 +166,35 @@ _build_ps1() {
     path_txt="$(_prompt_path_segment)"
     local dir_seg="\[\033[38;5;73m\]${path_txt}\[\033[0m\]"
     PS1="\n${time_seg} ${host_seg} ${dir_seg}$(_git_segment)$(_pkg_version_segment)$(_duration_segment)\n\[\033[38;5;108m\]❯\[\033[0m\] "
+}
+## chezmoi:theme-end default
+
+## chezmoi:theme-begin minimal
+## Version compacte du segment git : juste "(branche●)", pas d'ahead/behind.
+_git_segment_minimal() {
+    _git_refresh_cache
+    [ -z "$_git_cache_branch" ] && return
+    local dirty=""
+    [ -n "$_git_cache_dirty" ] && dirty="●"
+    echo " \[\033[38;5;244m\](${_git_cache_branch}${dirty})\[\033[0m\]"
+}
+
+## Une ligne : chemin + git compact, rien d'autre (pas d'heure/host/version de paquet/durée).
+_build_ps1_minimal() {
+    local ssh_seg=""
+    [ "$_CHEZMOI_IS_SSH" = "1" ] && ssh_seg="\[\033[38;5;208m\][ssh]\[\033[0m\] "
+    local path_txt
+    path_txt="$(_prompt_path_segment)"
+    local dir_seg="\[\033[38;5;73m\]${path_txt}\[\033[0m\]"
+    PS1="${ssh_seg}${dir_seg}$(_git_segment_minimal) \[\033[38;5;108m\]❯\[\033[0m\] "
+}
+## chezmoi:theme-end minimal
+
+_build_ps1() {
+    case "$CHEZMOI_PROMPT_THEME" in
+        minimal) _build_ps1_minimal ;;
+        *)       _build_ps1_default ;;
+    esac
 }
 
 ## Idempotent : évite doublons/`;;` si chezmoi.sh est re-sourcé (ex: `chezmoi update`).
