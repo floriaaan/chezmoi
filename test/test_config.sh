@@ -105,3 +105,60 @@ test_config_cmd_unset_missing_key_fails() {
 test_config_cmd_unknown_subcommand_fails() {
     assert_failure "chezmoi config <sous-commande inconnue> échoue" -- _chezmoi_config_cmd bogus
 }
+
+test_config_choices_prompt_theme_lists_all_themes() {
+    local out
+    out=$(_chezmoi_config_choices prompt.theme)
+    assert_match "default" "$out" "_chezmoi_config_choices prompt.theme liste 'default'"
+    assert_match "minimal" "$out" "_chezmoi_config_choices prompt.theme liste 'minimal'"
+    assert_match "agnoster" "$out" "_chezmoi_config_choices prompt.theme liste 'agnoster'"
+}
+
+test_config_choices_free_form_key_is_empty() {
+    local out
+    out=$(_chezmoi_config_choices ssh.modules)
+    assert_eq "" "$out" "ssh.modules est une clé à valeur libre: pas de choix énumérés"
+}
+
+test_config_set_no_value_lists_choices_for_closed_key() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(_chezmoi_config_set prompt.theme)
+        assert_success "chezmoi config set prompt.theme sans valeur réussit (liste, n'échoue pas)" \
+            -- _chezmoi_config_set prompt.theme
+        assert_match "default" "$out" "la liste des choix contient 'default'"
+        assert_match "minimal" "$out" "la liste des choix contient 'minimal'"
+        assert_match "agnoster" "$out" "la liste des choix contient 'agnoster'"
+    )
+}
+
+test_config_set_no_value_marks_active_choice() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        _chezmoi_config_set prompt.theme minimal >/dev/null
+        local out
+        out=$(_chezmoi_config_set prompt.theme)
+        assert_match "minimal.*actif" "$out" "le thème actuellement actif est marqué dans la liste"
+    )
+}
+
+test_config_set_no_value_fails_for_free_form_key() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        assert_failure "ssh.modules sans valeur échoue (clé à valeur libre, pas de choix à lister)" \
+            -- _chezmoi_config_set ssh.modules
+    )
+}
+
+test_config_cmd_set_no_value_lists_choices() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        assert_success "chezmoi config set prompt.theme (sans valeur) via _chezmoi_config_cmd" \
+            -- _chezmoi_config_cmd set prompt.theme
+    )
+}

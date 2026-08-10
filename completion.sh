@@ -36,6 +36,18 @@ _chezmoi_complete() {
             COMPREPLY=($(compgen -W "prompt.theme ssh.modules" -- "$cur"))
             return
         fi
+        ## Valeurs possibles pour "chezmoi config set prompt.theme <TAB>" (réutilise le registre de
+        ## config.sh s'il est chargé, sinon liste de secours).
+        if [ "$COMP_CWORD" -eq 4 ] && [ "${COMP_WORDS[2]}" = "set" ] && [ "${COMP_WORDS[3]}" = "prompt.theme" ]; then
+            local choices
+            if declare -f _chezmoi_config_choices >/dev/null 2>&1; then
+                choices="$(_chezmoi_config_choices prompt.theme)"
+            else
+                choices="default minimal agnoster"
+            fi
+            COMPREPLY=($(compgen -W "$choices" -- "$cur"))
+            return
+        fi
         return
     fi
 

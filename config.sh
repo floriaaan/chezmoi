@@ -4,8 +4,11 @@
 ## l'applique aussi immédiatement à la session en cours (pas besoin de relancer le shell).
 ##
 ## Clés connues aujourd'hui :
-##   prompt.theme   thème du prompt : "default" (2 lignes, complet) ou "minimal" (1 ligne, compact)
+##   prompt.theme   thème du prompt : "default", "minimal" ou "agnoster" (cf. prompt.sh)
 ##   ssh.modules    modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
+##
+## "chezmoi config set <clé>" sans valeur, pour une clé à choix fermé (ex: prompt.theme), liste les
+## valeurs possibles au lieu d'échouer (cf. _chezmoi_config_choices).
 
 CHEZMOI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi"
 CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
@@ -30,6 +33,15 @@ _chezmoi_config_default() {
     case "$1" in
         prompt.theme) printf '%s' "default" ;;
         ssh.modules)  printf '%s' "prompt git-aliases gtag" ;;
+    esac
+}
+
+## Valeurs possibles pour une clé à choix fermé, vide si la clé accepte une valeur libre
+## (ex: ssh.modules, dont les valeurs possibles ne sont pas énumérables).
+_chezmoi_config_choices() {
+    case "$1" in
+        prompt.theme) printf '%s' "default minimal agnoster" ;;
+        *) printf '%s' "" ;;
     esac
 }
 
@@ -66,15 +78,30 @@ _chezmoi_config_list() {
     done
 }
 
+## Sans valeur : liste les choix possibles pour une clé à choix fermé (ex: prompt.theme) au lieu
+## d'échouer ; pour une clé à valeur libre (ex: ssh.modules), affiche toujours l'usage.
 _chezmoi_config_set() {
-    local key="$1" val="$2" tmp
+    local key="$1" val="$2" tmp choices current c
     if ! _chezmoi_config_is_known "$key"; then
         printf "%b\n" "${_CONFIG_ERR}chezmoi config: clé inconnue '${key}' (clés: ${_CHEZMOI_CONFIG_KEYS})${_CONFIG_RESET}" >&2
         return 1
     fi
     if [ -z "$val" ]; then
-        printf "%b\n" "${_CONFIG_ERR}chezmoi config: usage: chezmoi config set <clé> <valeur>${_CONFIG_RESET}" >&2
-        return 1
+        choices="$(_chezmoi_config_choices "$key")"
+        if [ -z "$choices" ]; then
+            printf "%b\n" "${_CONFIG_ERR}chezmoi config: usage: chezmoi config set <clé> <valeur>${_CONFIG_RESET}" >&2
+            return 1
+        fi
+        current="$(_chezmoi_config_get "$key")"
+        printf "%b\n" "${_CONFIG_INFO}chezmoi config: valeurs possibles pour '${key}':${_CONFIG_RESET}"
+        for c in $choices; do
+            if [ "$c" = "$current" ]; then
+                printf "%b\n" "  ${_CONFIG_OK}${c}${_CONFIG_RESET} (actif)"
+            else
+                printf "%b\n" "  ${c}"
+            fi
+        done
+        return 0
     fi
     mkdir -p "$CHEZMOI_CONFIG_DIR"
     tmp=$(mktemp)
@@ -136,10 +163,12 @@ Usage:
   chezmoi config                    liste les clés et leurs valeurs actuelles
   chezmoi config get <clé>          affiche la valeur d'une clé
   chezmoi config set <clé> <valeur> définit une clé (persisté + appliqué immédiatement)
+  chezmoi config set <clé>          sans valeur : liste les choix possibles (clés à choix fermé)
   chezmoi config unset <clé>        réinitialise une clé à sa valeur par défaut
 
 Clés connues:
-  prompt.theme    thème du prompt : "default" (2 lignes, complet) ou "minimal" (1 ligne, compact)
+  prompt.theme    thème du prompt : "default" (2 lignes, complet), "minimal" (1 ligne, compact)
+                  ou "agnoster" (équivalent oh-my-zsh, blocs de couleur, sans nerd font)
   ssh.modules     modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
 EOF
             ;;

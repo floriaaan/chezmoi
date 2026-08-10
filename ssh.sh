@@ -109,6 +109,23 @@ _ssh_prompt_filter_theme() {
     ' "$file"
 }
 
+## Valide qu'un thème existe (réutilise le registre de config.sh si chargé, sinon liste de secours).
+## Indispensable avant de filtrer : un thème inconnu ferait sauter TOUS les blocs "## chezmoi:theme-*"
+## (aucun ne matche), laissant le dispatcheur distant appeler une fonction de rendu qui n'existe plus.
+_ssh_prompt_theme_is_known() {
+    emulate -L bash 2>/dev/null
+    local theme="$1" known c
+    if declare -f _chezmoi_config_choices >/dev/null 2>&1; then
+        known="$(_chezmoi_config_choices prompt.theme)"
+    else
+        known="default minimal agnoster"
+    fi
+    for c in $known; do
+        [ "$c" = "$theme" ] && return 0
+    done
+    return 1
+}
+
 ## Concatène le contenu des modules listés dans _SSH_CHEZMOI_MODULES (prompt -> variante shell
 ## distant, filtrée sur le thème actif via _ssh_prompt_filter_theme)
 _ssh_build_payload() {
@@ -123,7 +140,7 @@ _ssh_build_payload() {
             fi
             [ -f "$file" ] || continue
             theme="${CHEZMOI_PROMPT_THEME:-default}"
-            case "$theme" in *"'"*) theme="default" ;; esac
+            _ssh_prompt_theme_is_known "$theme" || theme="default"
             ## Le thème est imposé en dur (littéral) avant le fichier filtré : l'hôte distant n'a
             ## pas accès à la config locale (pas de CHEZMOI_PROMPT_THEME dans l'environnement, cf.
             ## note en tête de fichier sur AcceptEnv), et le fallback "${CHEZMOI_PROMPT_THEME:-default}"

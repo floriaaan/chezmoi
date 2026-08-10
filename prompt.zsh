@@ -4,9 +4,12 @@ autoload -Uz add-zsh-hook
 
 ## Thème du prompt (posé par config.sh depuis "chezmoi config set prompt.theme ..."). Thèmes
 ## disponibles :
-##   default  2 lignes : heure, user@host, chemin, git (branche+dirty+ahead/behind), version de
-##            paquet, durée de la commande précédente si >=3s
-##   minimal  1 ligne : chemin + git compact (branche+dirty), rien d'autre
+##   default   2 lignes : heure, user@host, chemin, git (branche+dirty+ahead/behind), version de
+##             paquet, durée de la commande précédente si >=3s
+##   minimal   1 ligne : chemin + git compact (branche+dirty), rien d'autre
+##   agnoster  équivalent du thème oh-my-zsh "agnoster" : blocs de couleur pleine (contexte
+##             user@host si ssh/root, chemin, git, code de sortie si échec), sans police
+##             powerline/nerd font (séparateur ▶ au lieu de la flèche  qui en nécessite une)
 ## Valeur inconnue -> fallback silencieux sur "default" (cf. _chezmoi_precmd plus bas).
 ##
 ## Les blocs "## chezmoi:theme-begin <nom>" / "## chezmoi:theme-end <nom>" ci-dessous délimitent
@@ -197,10 +200,61 @@ _chezmoi_precmd_minimal() {
 }
 ## chezmoi:theme-end minimal
 
+## chezmoi:theme-begin agnoster
+## Équivalent du thème oh-my-zsh "agnoster" sans police powerline/nerd font : blocs de couleur
+## pleine (contexte/chemin/git/statut), chacun terminé par un ▶ dans sa propre couleur plutôt que
+## par la flèche  qui nécessite une police patchée ("effet drapeau" au lieu d'un fondu continu).
+_agnoster_segment() {
+    local bg="$1" fg="$2" text="$3"
+    echo "%K{${bg}}%F{${fg}} ${text} %f%k%F{${bg}}▶%f"
+}
+
+## Contexte user@host : masqué en local (bruit inutile, comme le vrai agnoster), affiché en
+## orange en session ssh, en rouge si root (prioritaire sur ssh).
+_agnoster_context_segment() {
+    local is_root=0
+    [ "${EUID:-1000}" -eq 0 ] 2>/dev/null && is_root=1
+    if [ "$is_root" -eq 1 ]; then
+        _agnoster_segment 196 255 "%n@%m"
+        return
+    fi
+    [ "$_CHEZMOI_IS_SSH" = "1" ] || return
+    _agnoster_segment 208 0 "%n@%m"
+}
+
+_agnoster_dir_segment() {
+    local path_txt
+    path_txt="$(_prompt_path_segment)"
+    _agnoster_segment 73 0 "$path_txt"
+}
+
+_agnoster_git_segment() {
+    _git_refresh_cache
+    [ -z "$_git_cache_branch" ] && return
+    local bg=108 mark="⎇ ${_git_cache_branch}"
+    [ -n "$_git_cache_dirty" ] && bg=179 && mark="${mark} ±"
+    _agnoster_segment "$bg" 0 "$mark"
+}
+
+## Segment de statut : uniquement affiché si la commande précédente a échoué (comme le vrai agnoster).
+_agnoster_status_segment() {
+    local ec="$1"
+    [ -z "$ec" ] && return
+    [ "$ec" -eq 0 ] 2>/dev/null && return
+    _agnoster_segment 196 255 "✘ ${ec}"
+}
+
+_chezmoi_precmd_agnoster() {
+    local ec=$?
+    PROMPT="$(_agnoster_context_segment)$(_agnoster_dir_segment)$(_agnoster_git_segment)$(_agnoster_status_segment "$ec") "
+}
+## chezmoi:theme-end agnoster
+
 _chezmoi_precmd() {
     case "$CHEZMOI_PROMPT_THEME" in
-        minimal) _chezmoi_precmd_minimal ;;
-        *)       _chezmoi_precmd_default ;;
+        minimal)  _chezmoi_precmd_minimal ;;
+        agnoster) _chezmoi_precmd_agnoster ;;
+        *)        _chezmoi_precmd_default ;;
     esac
 }
 add-zsh-hook precmd _chezmoi_precmd
