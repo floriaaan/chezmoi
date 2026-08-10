@@ -54,3 +54,25 @@ test_chezmoi_update_refused_when_remote() {
         assert_failure "chezmoi update échoue en session distante" -- chezmoi update
     )
 }
+
+test_chezmoi_reload_resources_without_git() {
+    (
+        local out
+        out=$(chezmoi reload)
+        assert_match "rechargement" "$out" "chezmoi reload affiche un message de rechargement"
+    )
+}
+
+test_chezmoi_reload_works_when_remote() {
+    (
+        export CHEZMOI_REMOTE=1
+        assert_success "chezmoi reload fonctionne aussi en session distante (pas de dépôt git requis)" \
+            -- chezmoi reload
+    )
+}
+
+test_chezmoi_reload_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "reload" "$out" "chezmoi help mentionne reload"
+}

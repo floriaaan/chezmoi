@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 ## --- chezmoi: barrel file ---
 
-CHEZMOI_VERSION="1.7.1"
 CHEZMOI_REPO="floriaaan/chezmoi"
 
 # Détection du chemin du script, compatible bash ET zsh
 _chezmoi_self="${BASH_SOURCE[0]:-$0}"
 CHEZMOI_DIR="$(cd "$(dirname "$_chezmoi_self")" && pwd)"
 unset _chezmoi_self
+
+# Le fichier VERSION est l'unique source de vérité (pas de numéro dupliqué en dur ici)
+CHEZMOI_VERSION="$(cat "$CHEZMOI_DIR/VERSION" 2>/dev/null)"
+[ -z "$CHEZMOI_VERSION" ] && CHEZMOI_VERSION="0.0.0"
 
 CHEZMOI_CACHE="$HOME/.cache/chezmoi_last_check"
 
@@ -71,6 +74,10 @@ chezmoi() {
             printf "%b\n" "${_CHEZMOI_OK}chezmoi: mis à jour, rechargement...${_CHEZMOI_RESET}"
             source "$CHEZMOI_DIR/chezmoi.sh"
             ;;
+        reload)
+            printf "%b\n" "${_CHEZMOI_INFO}chezmoi: rechargement...${_CHEZMOI_RESET}"
+            source "$CHEZMOI_DIR/chezmoi.sh"
+            ;;
         version|-v|--version)
             printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET}"
             ;;
@@ -87,6 +94,7 @@ chezmoi - gestion de la config shell perso
 
 Usage:
   chezmoi update     met à jour les fichiers depuis origin/main et recharge
+  chezmoi reload     resource les fichiers depuis le disque, sans git pull (relit une modif locale)
   chezmoi version    affiche la version installée
   chezmoi doctor     vérifie les dépendances et l'état des modules
   chezmoi config     préférences persistantes (thème du prompt, modules ssh) ; 'chezmoi config help' pour le détail
