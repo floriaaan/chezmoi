@@ -4,7 +4,7 @@
 ## l'applique aussi immédiatement à la session en cours (pas besoin de relancer le shell).
 ##
 ## Clés connues aujourd'hui :
-##   prompt.theme      thème du prompt : "default", "minimal" ou "agnoster" (cf. prompt.sh)
+##   prompt.theme      thème du prompt : "default", "minimal", "agnoster" ou "floriaaan" (cf. prompt.sh)
 ##   prompt.segments   liste ordonnée (espacée) des segments affichés par le prompt, quel que soit
 ##                     le thème actif ; vide -> liste par défaut du thème (cf. prompt.sh)
 ##   ssh.modules       modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
@@ -49,7 +49,7 @@ _chezmoi_config_default() {
 ## (ex: ssh.modules, dont les valeurs possibles ne sont pas énumérables).
 _chezmoi_config_choices() {
     case "$1" in
-        prompt.theme) printf '%s' "default minimal agnoster" ;;
+        prompt.theme) printf '%s' "default minimal agnoster floriaaan" ;;
         *) printf '%s' "" ;;
     esac
 }
@@ -64,14 +64,17 @@ _chezmoi_config_preview() {
     [ "$key" = "prompt.theme" ] || return 0
     case "$choice" in
         default)
-            printf '%b\n' "      \033[38;5;244m[2026-08-10T12:00:03]\033[0m \033[38;5;110m[user@host]\033[0m \033[38;5;73m~/dev/myproject\033[0m on \033[38;5;179m⎇ main\033[0m \033[38;5;167m●\033[0m \033[38;5;108m↑1\033[0m \033[38;5;108mv1.2.3\033[0m"
-            printf '%b\n' "      \033[38;5;108m❯\033[0m "
+            printf '%b\n' "      \033[01;32muser@host\033[00m:\033[01;34m~/dev/myproject\033[00m\$ "
             ;;
         minimal)
             printf '%b\n' "      \033[38;5;73m~/dev/myproject\033[0m \033[38;5;244m(main●)\033[0m \033[38;5;108m❯\033[0m "
             ;;
         agnoster)
             printf '%b\n' "      \033[48;5;73m\033[38;5;0m ~/dev/myproject \033[0m\033[38;5;73m▶\033[0m\033[48;5;179m\033[38;5;0m ⎇ main ± \033[0m\033[38;5;179m▶\033[0m "
+            ;;
+        floriaaan)
+            printf '%b\n' "      \033[38;5;244m[2026-08-10T12:00:03]\033[0m \033[38;5;110m[user@host]\033[0m \033[38;5;73m~/dev/myproject\033[0m on \033[38;5;179m⎇ main\033[0m \033[38;5;167m●\033[0m \033[38;5;108m↑1\033[0m \033[38;5;108mv1.2.3\033[0m"
+            printf '%b\n' "      \033[38;5;108m❯\033[0m "
             ;;
     esac
 }
@@ -213,8 +216,10 @@ Usage:
   chezmoi config unset <clé>        réinitialise une clé à sa valeur par défaut
 
 Clés connues:
-  prompt.theme     thème du prompt : "default" (2 lignes, complet), "minimal" (1 ligne, compact)
-                   ou "agnoster" (équivalent oh-my-zsh, blocs de couleur, sans nerd font)
+  prompt.theme     thème du prompt : "default" (PS1 par défaut de bash reproduit à l'identique,
+                   couleurs vives non adoucies), "minimal" (1 ligne, compact), "agnoster"
+                   (équivalent oh-my-zsh, blocs de couleur, sans nerd font) ou "floriaaan"
+                   (2 lignes façon powerlevel10k, complet)
   prompt.segments  liste ordonnée (espacée) des segments affichés, ex: "time dir git node".
                    Vide -> liste par défaut du thème actif. Catalogue: ${_CHEZMOI_PROMPT_SEGMENT_NAMES}
   ssh.modules      modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")

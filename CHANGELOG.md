@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.0
+- feat: `prompt.sh`/`prompt.zsh` — nouveau thème `default` : reproduit à l'identique le PS1 par défaut de bash (squelette Debian `/etc/skel/.bashrc`), couleurs ANSI brutes (`01;32` vert vif, `01;34` bleu vif) au lieu de la palette 256 adoucie des autres thèmes, une seule ligne, aucun segment (`prompt.segments` sans effet sur ce thème, fidélité à l'original)
+- refactor: l'ancien thème `default` (2 lignes façon powerlevel10k, segments `time user dir git pkg duration`) est renommé `floriaaan` ; `minimal` et `agnoster` inchangés
+- feat: `config.sh` — `chezmoi config set prompt.theme` liste et prévisualise désormais les quatre thèmes (`default`/`minimal`/`agnoster`/`floriaaan`)
+
 ## 1.6.0
 - feat: `prompt.sh`/`prompt.zsh` — nouvelle clé `prompt.segments` (`chezmoi config set prompt.segments "<liste>"`) : liste ordonnée/espacée des segments affichés par le prompt, applicable aux trois thèmes (`default`/`minimal`/`agnoster`), en plus ou à la place de leur liste par défaut (`time user dir git pkg duration` / `dir git` / `user dir git exitcode`) ; nom de segment inconnu ignoré silencieusement (même fallback que pour un thème inconnu)
 - feat: `prompt.sh`/`prompt.zsh` — deux nouveaux segments : `node` (version node active via `node -v`, affiché seulement si `node` est dispo et le répertoire courant contient `package.json`/`.nvmrc`) et `exitcode` (code de sortie de la commande précédente si non nul, généralisé depuis le thème `agnoster` vers les trois thèmes)

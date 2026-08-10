@@ -2,11 +2,15 @@
 
 ## Thème du prompt (posé par config.sh depuis "chezmoi config set prompt.theme ..."). Thèmes
 ## disponibles :
-##   default   2 lignes : segments par défaut "time user dir git pkg duration"
+##   default   reproduit à l'identique le PS1 par défaut de bash (squelette Debian /etc/skel/.bashrc) :
+##             user@host en vert vif, chemin en bleu vif (couleurs ANSI 01;32/01;34 brutes, pas la
+##             palette 256 adoucie des autres thèmes), une seule ligne, aucun segment additionnel --
+##             prompt.segments ne s'applique donc pas à ce thème (fidélité à l'original prime)
 ##   minimal   1 ligne : segments par défaut "dir git" (git en rendu compact, sans ahead/behind)
 ##   agnoster  équivalent du thème oh-my-zsh "agnoster" : segments par défaut "user dir git exitcode"
 ##             en blocs de couleur pleine, sans police powerline/nerd font (séparateur ▶ au lieu de
 ##             la flèche  qui en nécessite une)
+##   floriaaan 2 lignes façon powerlevel10k : segments par défaut "time user dir git pkg duration"
 ## Valeur inconnue -> fallback silencieux sur "default" (cf. _build_ps1 plus bas).
 ##
 ## Segments : chaque thème affiche une LISTE ORDONNÉE de segments (séparés par des espaces),
@@ -31,7 +35,7 @@
 ## l'hôte distant que le code du thème réellement sélectionné (évite de surcharger la charge utile
 ## avec le rendu des thèmes non utilisés). Les segments eux, sont tous communs (hors blocs
 ## thème) puisqu'un segment donné (ex: "node") doit rester utilisable quel que soit le thème actif
-## localement ou embarqué en ssh. Ça ne change rien au chargement local, où les trois thèmes
+## localement ou embarqué en ssh. Ça ne change rien au chargement local, où les quatre thèmes
 ## restent chargés en même temps pour permettre un changement à chaud (cf. config.sh).
 CHEZMOI_PROMPT_THEME="${CHEZMOI_PROMPT_THEME:-default}"
 CHEZMOI_PROMPT_SEGMENTS="${CHEZMOI_PROMPT_SEGMENTS:-}"
@@ -220,7 +224,7 @@ _plain_segment_render() {
     esac
 }
 
-## chezmoi:theme-begin default
+## chezmoi:theme-begin floriaaan
 _git_segment() {
     _git_refresh_cache
     [ -z "$_git_cache_branch" ] && return
@@ -231,7 +235,7 @@ _git_segment() {
     echo " on \[\033[38;5;179m\]⎇ $_git_cache_branch\[\033[0m\]$dirty$ab"
 }
 
-_build_ps1_default() {
+_build_ps1_floriaaan() {
     local ec=$?
     local segs="${CHEZMOI_PROMPT_SEGMENTS:-time user dir git pkg duration}"
     local body="" seg
@@ -241,7 +245,7 @@ _build_ps1_default() {
     body="${body# }"
     PS1="\n${body}\n\[\033[38;5;108m\]❯\[\033[0m\] "
 }
-## chezmoi:theme-end default
+## chezmoi:theme-end floriaaan
 
 ## chezmoi:theme-begin minimal
 ## Version compacte du segment git : juste "(branche●)", pas d'ahead/behind.
@@ -381,11 +385,23 @@ _build_ps1_agnoster() {
 }
 ## chezmoi:theme-end agnoster
 
+## chezmoi:theme-begin default
+## Reproduit tel quel le PS1 par défaut de bash (celui du squelette Debian /etc/skel/.bashrc, le
+## plus répandu) : mêmes échappements (\u \h \w \$), mêmes couleurs ANSI brutes (01;32 vert vif,
+## 01;34 bleu vif -- pas la palette 256 adoucie du reste du fichier), même prise en charge de
+## $debian_chroot. Pas de dispatch par segment ici : le vrai bash n'en a pas, donc prompt.segments
+## ne s'applique pas à ce thème (contrairement aux trois autres).
+_build_ps1_default() {
+    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+}
+## chezmoi:theme-end default
+
 _build_ps1() {
     case "$CHEZMOI_PROMPT_THEME" in
-        minimal)  _build_ps1_minimal ;;
-        agnoster) _build_ps1_agnoster ;;
-        *)        _build_ps1_default ;;
+        minimal)   _build_ps1_minimal ;;
+        agnoster)  _build_ps1_agnoster ;;
+        floriaaan) _build_ps1_floriaaan ;;
+        *)         _build_ps1_default ;;
     esac
 }
 
