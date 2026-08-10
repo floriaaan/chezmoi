@@ -18,9 +18,9 @@ Ordre de chargement (barrel `chezmoi.sh`) : `config → history → z → git-al
 - **ports.sh** — `ports [PORT|PATTERN]` liste les sockets en écoute (TCP+UDP), via `ss` (fallback `netstat`). `kport <PORT> [--force]` tue le process associé, avec confirmation (refuse PID 1 et les process d'un autre utilisateur, sauf root).
 - **extract.sh** — `extract <archive> [dest]` décompresse selon l'extension (`.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst`, `.tar`, `.gz`, `.bz2`, `.xz`, `.zip`, `.7z`, `.rar`), avec protection anti-tarbomb (propose un dossier dédié si l'archive a plusieurs entrées racine). `compress <dest.ext> <fichiers...>` fait l'inverse.
 - **ssh.sh** — wrapper `ssh` qui embarque `prompt`/`git-aliases`/`gtag` sur l'hôte distant sans rien y écrire (config base64 embarquée en littéral dans la commande distante exécutée par ssh — pas de variable d'env, donc aucune dépendance à `AcceptEnv`/`SetEnv` côté serveur, ni à un client OpenSSH récent). Le module `prompt` n'embarque que le rendu du thème actif (`prompt.theme`, imposé en littéral pour l'hôte distant), pas les autres thèmes — allège la charge utile. Fallback automatique et silencieux vers une session `ssh` normale si l'injection échoue pour n'importe quelle raison (charge trop grosse, `base64` absent côté distant, commande forcée par le serveur, etc). Résultat mis en cache par hôte (`~/.cache/chezmoi_ssh_hosts`, `_SSH_CHEZMOI_CACHE_TTL=86400`) pour ne pas retenter/avertir à chaque connexion vers un hôte déjà connu incompatible. `command ssh`/`ssh-raw` pour contourner. `ssh-chezmoi-test <host>` diagnostique la config sans ouvrir de session (et rafraîchit le cache).
-- **completion.sh** — tab-completion for `gtag`/`chezmoi` subcommands + hooks git's own completion (if present on the machine) onto `gco`/`gcb`/`gb`/`gm`/`grb`.
+- **completion.sh** — tab-completion for `gtag`/`chezmoi` subcommands; hooks git's own completion (if present on the machine) onto every alias defined in `git-aliases.sh` (`gco sta<TAB>` → `gco staging`, same for `ga`/`gp`/`gd`/`gs`/`glog`/...); sources go-task's own completion (`task --completion bash`/`zsh`) if `task` is present on the machine — no install forced either way.
 - **colors.sh** — `LS_COLORS`/`GREP_COLORS` + colored `ls`/`grep`/`diff` aliases (GNU/BSD auto-detected). Also auto-sources `zsh-syntax-highlighting`/`zsh-autosuggestions` under zsh if already installed on the machine (no install forced; opt out with `CHEZMOI_NO_ZSH_PLUGINS=1`).
-- **chezmoi.sh** — barrel: detects bash/zsh, sources common modules + right prompt file, daily update check against GitHub, `chezmoi update|version|doctor|config|help` commands. `CHEZMOI_REMOTE=1` (posé par `ssh.sh` côté distant) désactive le check de version et l'écriture de cache.
+- **chezmoi.sh** — barrel: detects bash/zsh, sources common modules + right prompt file, daily update check against GitHub, `chezmoi update|reload|version|doctor|config|help` commands. `CHEZMOI_REMOTE=1` (posé par `ssh.sh` côté distant) désactive le check de version et l'écriture de cache.
 
 ## Install
 
@@ -35,6 +35,7 @@ source /path/to/chezmoi.sh
 ```bash
 chezmoi version   # show installed version
 chezmoi update    # git pull origin main, reload
+chezmoi reload    # re-source files from disk, no git pull (picks up a local edit)
 chezmoi doctor    # check dependencies/modules
 chezmoi config                          # list preferences (prompt theme, ssh modules) and current values
 chezmoi config set ssh.modules "prompt gtag"   # persisted + applied immediately
@@ -75,4 +76,4 @@ CI (`.github/workflows/ci.yml`) runs `shellcheck` and the test suite under both 
 
 ## Version
 
-See `VERSION` file. Current: 1.7.1
+See `VERSION` file.

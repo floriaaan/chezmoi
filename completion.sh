@@ -1,4 +1,4 @@
-## --- Autocomplétion pour les commandes maison (gtag, chezmoi) + hookup git ---
+## --- Autocomplétion pour les commandes maison (gtag, chezmoi) + hookup git + go-task ---
 ## Suppose "complete" dispo (bashcompinit déjà chargé sous zsh par le barrel, cf. chezmoi.sh)
 
 _gtag_complete() {
@@ -52,17 +52,75 @@ _chezmoi_complete() {
     fi
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "update version doctor config help" -- "$cur"))
+        COMPREPLY=($(compgen -W "update reload version doctor config help" -- "$cur"))
         return
     fi
 }
 complete -F _chezmoi_complete chezmoi
 
-## --- Hookup complétion git native sur les alias (si déjà présente sur la machine, aucune install forcée) ---
-if declare -f __git_complete >/dev/null 2>&1; then
-    __git_complete gco _git_checkout
-    __git_complete gcb _git_checkout
-    __git_complete gb _git_branch
-    __git_complete gm _git_merge
-    __git_complete grb _git_rebase
-fi
+## --- Complétion go-task (si présent sur la machine, aucune install forcée) ---
+## `task --completion <shell>` génère le script de complétion officiel du binaire détecté,
+## rien n'est écrit sur disque. Silencieux si absent ou si la sous-commande n'existe pas
+## (anciennes versions de go-task).
+_completion_hookup_task() {
+    emulate -L bash 2>/dev/null
+    command -v task >/dev/null 2>&1 || return 0
+    if [ -n "$ZSH_VERSION" ]; then
+        eval "$(task --completion zsh 2>/dev/null)" 2>/dev/null
+    else
+        eval "$(task --completion bash 2>/dev/null)" 2>/dev/null
+    fi
+}
+_completion_hookup_task
+
+## --- Hookup complétion git native sur les alias de git-aliases.sh (si déjà présente sur la
+## machine, aucune install forcée) : chaque alias récupère la complétion de la sous-commande git
+## qu'il enveloppe (ex: `gco sta<TAB>` -> `gco staging`, comme `git checkout sta<TAB>`) ---
+## Chemins connus de git-completion.bash : sur beaucoup de machines (bash-completion v2),
+## __git_complete/_git_xxx ne sont définis qu'au premier "git <TAB>" tapé dans la session
+## (chargement dynamique paresseux) — donc absents ici si ce module est sourcé au démarrage
+## du shell, avant tout TAB. On source directement le script source si trouvé, pour ne pas en
+## dépendre. Fonctionne aussi sous zsh (bashcompinit est chargé par le barrel avant ce module).
+_COMPLETION_GIT_COMPLETION_PATHS=(
+    /usr/share/bash-completion/completions/git
+    /etc/bash_completion.d/git
+    /usr/share/git/completion/git-completion.bash
+    /usr/share/git-core/contrib/completion/git-completion.bash
+    /usr/local/etc/bash_completion.d/git-completion.bash
+    /opt/homebrew/etc/bash_completion.d/git-completion.bash
+    "$HOME/.git-completion.bash"
+)
+_completion_source_git_completion_bash() {
+    emulate -L bash 2>/dev/null
+    declare -f __git_complete >/dev/null 2>&1 && return 0
+    local p
+    for p in "${_COMPLETION_GIT_COMPLETION_PATHS[@]}"; do
+        [ -f "$p" ] && source "$p" 2>/dev/null && break
+    done
+}
+
+_completion_hookup_git_aliases() {
+    emulate -L bash 2>/dev/null
+    _completion_source_git_completion_bash
+    declare -f __git_complete >/dev/null 2>&1 || return 0
+    __git_complete ga   _git_add
+    __git_complete gaa  _git_add
+    __git_complete gc   _git_commit
+    __git_complete gca  _git_commit
+    __git_complete gp   _git_push
+    __git_complete gpf  _git_push
+    __git_complete gl   _git_pull
+    __git_complete gco  _git_checkout
+    __git_complete gcb  _git_checkout
+    __git_complete gb   _git_branch
+    __git_complete gd   _git_diff
+    __git_complete gds  _git_diff
+    __git_complete glog _git_log
+    __git_complete gs   _git_stash
+    __git_complete gsp  _git_stash
+    __git_complete grh  _git_reset
+    __git_complete gcp  _git_cherry_pick
+    __git_complete gm   _git_merge
+    __git_complete grb  _git_rebase
+}
+_completion_hookup_git_aliases

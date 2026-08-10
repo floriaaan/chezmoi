@@ -27,5 +27,117 @@ test_chezmoi_completion() {
     COMPREPLY=()
     _chezmoi_complete
     assert_match "update" "${COMPREPLY[*]}" "chezmoi <TAB> propose update"
+    assert_match "reload" "${COMPREPLY[*]}" "chezmoi <TAB> propose reload"
     assert_match "version" "${COMPREPLY[*]}" "chezmoi <TAB> propose version"
+}
+
+## --- go-task : eval "$(task --completion <shell>)" si le binaire est présent, no-op sinon ---
+
+test_task_completion_hookup_installs_completion_when_task_present() {
+    (
+        local fake_bin
+        fake_bin=$(mktemp -d)
+        cat > "$fake_bin/task" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--completion" ]; then
+    echo '_fake_task_complete() { COMPREPLY=(fake); }'
+    echo 'complete -F _fake_task_complete task'
+fi
+EOF
+        chmod +x "$fake_bin/task"
+        PATH="$fake_bin:$PATH"
+        _completion_hookup_task
+        assert_success "task présent -> le script de complétion qu'il fournit est bien évalué" \
+            -- declare -f _fake_task_complete
+    )
+}
+
+test_task_completion_hookup_noop_when_task_absent() {
+    (
+        local fake_bin
+        fake_bin=$(mktemp -d)
+        PATH="$fake_bin"
+        assert_success "task absent du PATH -> _completion_hookup_task ne plante pas (no-op silencieux)" \
+            -- _completion_hookup_task
+    )
+}
+
+## --- git : hookup __git_complete sur tous les alias de git-aliases.sh (si dispo sur la machine) ---
+
+test_git_alias_completion_hookup_noop_without_git_complete() {
+    (
+        unset -f __git_complete 2>/dev/null
+        _COMPLETION_GIT_COMPLETION_PATHS=()
+        assert_success "__git_complete absent et aucun git-completion.bash trouvable -> pas de plantage" \
+            -- _completion_hookup_git_aliases
+    )
+}
+
+## __git_complete/_git_xxx sont souvent chargés paresseusement par bash-completion (au premier
+## "git <TAB>" de la session) : absents si ce module est sourcé au démarrage du shell, avant tout
+## TAB. _completion_source_git_completion_bash doit aller chercher git-completion.bash lui-même.
+test_git_completion_bash_sourced_from_known_path_when_git_complete_missing() {
+    (
+        unset -f __git_complete 2>/dev/null
+        local fake_dir
+        fake_dir=$(mktemp -d)
+        cat > "$fake_dir/git-completion.bash" <<'EOF'
+__git_complete() { :; }
+_git_checkout() { :; }
+EOF
+        _COMPLETION_GIT_COMPLETION_PATHS=("$fake_dir/git-completion.bash")
+        _completion_source_git_completion_bash
+        assert_success "git-completion.bash trouvé à un chemin connu -> sourcé, __git_complete défini" \
+            -- declare -f __git_complete
+    )
+}
+
+test_git_completion_bash_lookup_skipped_when_git_complete_already_defined() {
+    (
+        __git_complete() { :; }
+        _COMPLETION_GIT_COMPLETION_PATHS=("/does/not/exist/git-completion.bash")
+        assert_success "__git_complete déjà défini -> pas de recherche de fichier inutile" \
+            -- _completion_source_git_completion_bash
+    )
+}
+
+test_git_alias_completion_hookup_covers_every_alias_of_git_aliases_sh() {
+    (
+        local calls=() aliases_defined aliases_hooked
+        __git_complete() { calls+=("$1"); }
+        _completion_hookup_git_aliases
+        aliases_defined=$(grep -oE "^alias [a-zA-Z]+=" "$_test_repo_dir/git-aliases.sh" \
+            | sed -E 's/^alias ([a-zA-Z]+)=/\1/' | sort -u | tr '\n' ' ')
+        aliases_hooked=$(printf '%s\n' "${calls[@]}" | sort -u | tr '\n' ' ')
+        assert_eq "$aliases_defined" "$aliases_hooked" \
+            "chaque alias de git-aliases.sh a une complétion git hookée (et aucun alias fantôme)"
+    )
+}
+
+test_git_alias_gco_maps_to_git_checkout_completion() {
+    (
+        local got=""
+        __git_complete() { [ "$1" = "gco" ] && got="$2"; }
+        _completion_hookup_git_aliases
+        assert_eq "_git_checkout" "$got" \
+            "gco -> complétion de 'git checkout' (ex: gco sta<TAB> -> gco staging)"
+    )
+}
+
+test_git_alias_gp_maps_to_git_push_completion() {
+    (
+        local got=""
+        __git_complete() { [ "$1" = "gp" ] && got="$2"; }
+        _completion_hookup_git_aliases
+        assert_eq "_git_push" "$got" "gp -> complétion de 'git push' (remotes/branches)"
+    )
+}
+
+test_git_alias_gs_maps_to_git_stash_completion() {
+    (
+        local got=""
+        __git_complete() { [ "$1" = "gs" ] && got="$2"; }
+        _completion_hookup_git_aliases
+        assert_eq "_git_stash" "$got" "gs -> complétion de 'git stash'"
+    )
 }
