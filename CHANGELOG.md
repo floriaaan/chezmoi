@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.1
+- fix: `test/test_prompt.sh`/`test/test_config.sh` — assertions mises à jour après la permutation `default`/`floriaaan` (1.7.0) : le segment heure et la personnalisation via `prompt.segments` sont désormais testés sur `floriaaan`, `default` est testé contre les couleurs ANSI brutes du vrai bash (`01;32`/`01;34`) et son immunité à `prompt.segments`, les aperçus `chezmoi config set prompt.theme` sont réassociés au bon thème
+- fix: `test/test_chezmoi.sh`/`test/test_config.sh` — sourçaient le barrel/`config.sh` réel sans isoler `XDG_CONFIG_HOME`, donc `_chezmoi_config_load_all` lisait le vrai `~/.config/chezmoi/config` de la machine au chargement des tests et répercutait son contenu (`prompt.theme`/`prompt.segments`) dans des variables globales hors sous-shell, polluant tous les tests de `prompt.sh`/`prompt.zsh` sourcés ensuite dans le même process (2 tests en faux échec selon le contenu du fichier local). `XDG_CONFIG_HOME` est désormais détourné vers un répertoire temporaire le temps du `source`
+
 ## 1.7.0
 - feat: `prompt.sh`/`prompt.zsh` — nouveau thème `default` : reproduit à l'identique le PS1 par défaut de bash (squelette Debian `/etc/skel/.bashrc`), couleurs ANSI brutes (`01;32` vert vif, `01;34` bleu vif) au lieu de la palette 256 adoucie des autres thèmes, une seule ligne, aucun segment (`prompt.segments` sans effet sur ce thème, fidélité à l'original)
 - refactor: l'ancien thème `default` (2 lignes façon powerlevel10k, segments `time user dir git pkg duration`) est renommé `floriaaan` ; `minimal` et `agnoster` inchangés

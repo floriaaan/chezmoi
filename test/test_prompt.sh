@@ -66,12 +66,12 @@ _prompt_render() {
     fi
 }
 
-test_prompt_theme_default_has_time_segment() {
+test_prompt_theme_floriaaan_has_time_segment() {
     (
-        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_THEME=floriaaan
         local out
         out=$(_prompt_render)
-        assert_match 'D\{' "$out" "thème default: le prompt contient un segment heure"
+        assert_match 'D\{' "$out" "thème floriaaan: le prompt contient un segment heure"
     )
 }
 
@@ -89,7 +89,7 @@ test_prompt_theme_unknown_falls_back_to_default() {
         CHEZMOI_PROMPT_THEME=bogus
         local out
         out=$(_prompt_render)
-        assert_match 'D\{' "$out" "thème inconnu -> fallback silencieux sur default"
+        assert_match '01;32' "$out" "thème inconnu -> fallback silencieux sur default (PS1 bash)"
     )
 }
 
@@ -100,6 +100,18 @@ test_prompt_theme_agnoster_has_no_time_segment_but_has_separator() {
         out=$(_prompt_render)
         assert_not_match 'D\{' "$out" "thème agnoster: pas de segment heure"
         assert_match '▶' "$out" "thème agnoster: contient le séparateur de segment ▶"
+    )
+}
+
+test_prompt_theme_default_matches_real_bash_defaults() {
+    (
+        CHEZMOI_PROMPT_THEME=default
+        local out
+        out=$(_prompt_render)
+        assert_match '01;32' "$out" "thème default: vert vif (bold), couleur ANSI brute du vrai bash"
+        assert_match '01;34' "$out" "thème default: bleu vif (bold), couleur ANSI brute du vrai bash"
+        assert_not_match '38;5;' "$out" "thème default: pas la palette 256 adoucie des autres thèmes"
+        assert_not_match 'D\{' "$out" "thème default: pas de segment heure (fidèle au PS1 bash minimal)"
     )
 }
 
@@ -181,7 +193,7 @@ test_node_segment_shown_with_package_json() {
 
 test_prompt_segments_config_overrides_theme_default_order() {
     (
-        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_THEME=floriaaan
         CHEZMOI_PROMPT_SEGMENTS="dir"
         local out
         out=$(_prompt_render)
@@ -191,11 +203,21 @@ test_prompt_segments_config_overrides_theme_default_order() {
 
 test_prompt_segments_config_unknown_segment_is_silently_ignored() {
     (
-        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_THEME=floriaaan
         CHEZMOI_PROMPT_SEGMENTS="dir bogus git"
         local out
         out=$(_prompt_render)
         assert_not_match 'bogus' "$out" "segment inconnu dans prompt.segments: ignoré silencieusement"
+    )
+}
+
+test_prompt_segments_config_ignored_by_default_theme() {
+    (
+        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_SEGMENTS="dir"
+        local out
+        out=$(_prompt_render)
+        assert_match '01;32' "$out" "thème default: prompt.segments n'a aucun effet, le PS1 bash reste fixe"
     )
 }
 

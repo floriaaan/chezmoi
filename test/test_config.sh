@@ -1,7 +1,16 @@
 ## --- Tests: config.sh ---
 
 _test_repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+## XDG_CONFIG_HOME détourné le temps de sourcer config.sh : sans ça, _chezmoi_config_load_all (fin
+## de fichier) lirait le vrai ~/.config/chezmoi/config de la machine et répercuterait son contenu
+## (prompt.theme, prompt.segments...) dans des variables globales -- posées ici hors de tout
+## sous-shell, elles survivraient pour le reste du process de test et fausseraient tous les tests
+## de prompt.sh/.zsh sourcés après ce fichier (pollution suivant l'ordre de découverte de
+## compgen -A function, qui n'est pas garanti être l'ordre alphabétique des fichiers test_*.sh).
+_test_config_orig_xdg_config_home="$XDG_CONFIG_HOME"
+export XDG_CONFIG_HOME=$(mktemp -d)
 source "$_test_repo_dir/config.sh"
+export XDG_CONFIG_HOME="$_test_config_orig_xdg_config_home"
 
 test_config_default_prompt_theme() {
     (
@@ -112,6 +121,7 @@ test_config_choices_prompt_theme_lists_all_themes() {
     assert_match "default" "$out" "_chezmoi_config_choices prompt.theme liste 'default'"
     assert_match "minimal" "$out" "_chezmoi_config_choices prompt.theme liste 'minimal'"
     assert_match "agnoster" "$out" "_chezmoi_config_choices prompt.theme liste 'agnoster'"
+    assert_match "floriaaan" "$out" "_chezmoi_config_choices prompt.theme liste 'floriaaan'"
 }
 
 test_config_choices_free_form_key_is_empty() {
@@ -131,17 +141,20 @@ test_config_set_no_value_lists_choices_for_closed_key() {
         assert_match "default" "$out" "la liste des choix contient 'default'"
         assert_match "minimal" "$out" "la liste des choix contient 'minimal'"
         assert_match "agnoster" "$out" "la liste des choix contient 'agnoster'"
+        assert_match "floriaaan" "$out" "la liste des choix contient 'floriaaan'"
     )
 }
 
 test_config_preview_returns_example_per_theme() {
     local out
     out=$(_chezmoi_config_preview prompt.theme default)
-    assert_match "main" "$out" "aperçu 'default': contient un exemple de branche"
+    assert_match '\$' "$out" "aperçu 'default': se termine par le \$ du PS1 bash"
     out=$(_chezmoi_config_preview prompt.theme minimal)
     assert_match "❯" "$out" "aperçu 'minimal': contient le caractère de prompt"
     out=$(_chezmoi_config_preview prompt.theme agnoster)
     assert_match "▶" "$out" "aperçu 'agnoster': contient le séparateur de segment"
+    out=$(_chezmoi_config_preview prompt.theme floriaaan)
+    assert_match "main" "$out" "aperçu 'floriaaan': contient un exemple de branche"
 }
 
 test_config_preview_empty_for_free_form_key() {
