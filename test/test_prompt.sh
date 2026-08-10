@@ -143,6 +143,72 @@ test_agnoster_status_segment_shown_on_failure() {
     assert_match '✘ 1' "$out" "segment statut affiché avec le code de sortie en cas d'échec"
 }
 
+test_exitcode_segment_hidden_on_success() {
+    local out
+    out=$(_exitcode_segment 0)
+    assert_eq "" "$out" "segment exitcode: rien affiché quand la commande précédente a réussi"
+}
+
+test_exitcode_segment_shown_on_failure() {
+    local out
+    out=$(_exitcode_segment 1)
+    assert_match '✘ 1' "$out" "segment exitcode: code de sortie affiché en cas d'échec"
+}
+
+test_node_segment_hidden_outside_node_project() {
+    (
+        local tmp
+        tmp=$(mktemp -d)
+        cd "$tmp" || exit 1
+        local out
+        out=$(_node_segment)
+        assert_eq "" "$out" "segment node: rien affiché hors répertoire projet node (pas de package.json/.nvmrc)"
+    )
+}
+
+test_node_segment_shown_with_package_json() {
+    (
+        command -v node >/dev/null 2>&1 || { printf "%b\n" "${_TEST_OK}ok${_TEST_RESET} (node absent, test sauté)"; return 0; }
+        local tmp
+        tmp=$(mktemp -d)
+        cd "$tmp" || exit 1
+        : > package.json
+        local out
+        out=$(_node_segment)
+        assert_match 'v[0-9]' "$out" "segment node: affiche la version quand package.json est présent"
+    )
+}
+
+test_prompt_segments_config_overrides_theme_default_order() {
+    (
+        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_SEGMENTS="dir"
+        local out
+        out=$(_prompt_render)
+        assert_not_match 'D\{' "$out" "prompt.segments personnalisé: n'affiche que les segments demandés (pas 'time')"
+    )
+}
+
+test_prompt_segments_config_unknown_segment_is_silently_ignored() {
+    (
+        CHEZMOI_PROMPT_THEME=default
+        CHEZMOI_PROMPT_SEGMENTS="dir bogus git"
+        local out
+        out=$(_prompt_render)
+        assert_not_match 'bogus' "$out" "segment inconnu dans prompt.segments: ignoré silencieusement"
+    )
+}
+
+test_prompt_segments_config_applies_to_agnoster_theme_too() {
+    (
+        CHEZMOI_PROMPT_THEME=agnoster
+        CHEZMOI_PROMPT_SEGMENTS="dir"
+        local out
+        out=$(_prompt_render)
+        assert_not_match '✘' "$out" "prompt.segments personnalisé s'applique aussi au thème agnoster (pas de segment exitcode ici)"
+    )
+}
+
 test_git_segment_minimal_shows_branch_no_ahead_behind() {
     (
         local tmp branch out

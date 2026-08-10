@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ## --- chezmoi: barrel file ---
 
-CHEZMOI_VERSION="1.5.0"
+CHEZMOI_VERSION="1.6.0"
 CHEZMOI_REPO="floriaaan/chezmoi"
 
 # Détection du chemin du script, compatible bash ET zsh

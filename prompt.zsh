@@ -4,20 +4,39 @@ autoload -Uz add-zsh-hook
 
 ## Thème du prompt (posé par config.sh depuis "chezmoi config set prompt.theme ..."). Thèmes
 ## disponibles :
-##   default   2 lignes : heure, user@host, chemin, git (branche+dirty+ahead/behind), version de
-##             paquet, durée de la commande précédente si >=3s
-##   minimal   1 ligne : chemin + git compact (branche+dirty), rien d'autre
-##   agnoster  équivalent du thème oh-my-zsh "agnoster" : blocs de couleur pleine (contexte
-##             user@host si ssh/root, chemin, git, code de sortie si échec), sans police
-##             powerline/nerd font (séparateur ▶ au lieu de la flèche  qui en nécessite une)
+##   default   2 lignes : segments par défaut "time user dir git pkg duration"
+##   minimal   1 ligne : segments par défaut "dir git" (git en rendu compact, sans ahead/behind)
+##   agnoster  équivalent du thème oh-my-zsh "agnoster" : segments par défaut "user dir git exitcode"
+##             en blocs de couleur pleine, sans police powerline/nerd font (séparateur ▶ au lieu de
+##             la flèche  qui en nécessite une)
 ## Valeur inconnue -> fallback silencieux sur "default" (cf. _chezmoi_precmd plus bas).
+##
+## Segments : chaque thème affiche une LISTE ORDONNÉE de segments (séparés par des espaces),
+## personnalisable via "chezmoi config set prompt.segments '<liste>'" (ex: "time dir git node"),
+## appliquée quel que soit le thème actif. Vide/non posée -> liste par défaut du thème (ci-dessus).
+## Nom de segment inconnu -> ignoré silencieusement (même logique de fallback que pour le thème).
+## Catalogue :
+##   time      heure courante
+##   user      user@host (préfixé "[ssh]" en session distante ; masqué en agnoster hors ssh/root)
+##   dir       chemin courant (tronqué, cf. _prompt_truncate_path)
+##   git       branche + dirty + ahead/behind (rendu compact en thème minimal : pas d'ahead/behind)
+##   pkg       version lue dans package.json/composer.json du répertoire courant
+##   node      version node active ("node -v"), affichée seulement si node dispo et
+##             package.json/.nvmrc présent dans le répertoire courant
+##   duration  durée de la commande précédente si >=3s
+##   exitcode  code de sortie de la commande précédente si non nul
+## Le repère "[ssh]" du thème minimal reste géré à part (pas un segment) : c'est le seul indice
+## ssh de ce thème compact, indépendant du segment "user" (qui affiche le user@host complet).
 ##
 ## Les blocs "## chezmoi:theme-begin <nom>" / "## chezmoi:theme-end <nom>" ci-dessous délimitent
 ## le code propre à chaque thème : ssh.sh (_ssh_build_payload) s'en sert pour n'embarquer sur
 ## l'hôte distant que le code du thème réellement sélectionné (évite de surcharger la charge utile
-## avec le rendu des thèmes non utilisés). Ça ne change rien au chargement local, où les deux
-## thèmes restent chargés en même temps pour permettre un changement à chaud (cf. config.sh).
+## avec le rendu des thèmes non utilisés). Les segments eux, sont tous communs (hors blocs
+## thème) puisqu'un segment donné (ex: "node") doit rester utilisable quel que soit le thème actif
+## localement ou embarqué en ssh. Ça ne change rien au chargement local, où les trois thèmes
+## restent chargés en même temps pour permettre un changement à chaud (cf. config.sh).
 CHEZMOI_PROMPT_THEME="${CHEZMOI_PROMPT_THEME:-default}"
+CHEZMOI_PROMPT_SEGMENTS="${CHEZMOI_PROMPT_SEGMENTS:-}"
 
 _PROMPT_PATH_MAXLEN=60
 
@@ -115,17 +134,6 @@ _git_refresh_cache() {
     fi
 }
 
-## chezmoi:theme-begin default
-_git_segment() {
-    _git_refresh_cache
-    [ -z "$_git_cache_branch" ] && return
-    local dirty="" ab=""
-    [ -n "$_git_cache_dirty" ] && dirty=" %F{167}●%f"
-    [ -n "$_git_cache_ahead" ] && [ "$_git_cache_ahead" -gt 0 ] 2>/dev/null && ab="${ab} %F{108}↑${_git_cache_ahead}%f"
-    [ -n "$_git_cache_behind" ] && [ "$_git_cache_behind" -gt 0 ] 2>/dev/null && ab="${ab} %F{167}↓${_git_cache_behind}%f"
-    echo " on %F{179}⎇ $_git_cache_branch%f$dirty$ab"
-}
-
 _pkg_version_segment() {
     local file version
     if [ -f "package.json" ]; then
@@ -138,6 +146,45 @@ _pkg_version_segment() {
     version=$(grep -m1 '"version"' "$file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9._-]*')
     [ -z "$version" ] && return
     echo " %F{108}v$version%f"
+}
+
+## Version node active, seulement si node est dispo et le répertoire courant ressemble à un
+## projet node (package.json ou .nvmrc) -- évite le bruit d'un "node -v" hors contexte projet.
+_node_segment() {
+    command -v node >/dev/null 2>&1 || return
+    { [ -f package.json ] || [ -f .nvmrc ]; } || return
+    local v
+    v=$(node -v 2>/dev/null) || return
+    [ -z "$v" ] && return
+    echo " %F{70}⬡ ${v}%f"
+}
+
+## Code de sortie de la commande précédente, affiché seulement en cas d'échec. $? doit être
+## capturé par l'appelant en tout premier (avant toute substitution de commande) et passé en argument.
+_exitcode_segment() {
+    local ec="$1"
+    [ -z "$ec" ] && return
+    [ "$ec" -eq 0 ] 2>/dev/null && return
+    echo " %F{196}✘ ${ec}%f"
+}
+
+_time_segment() {
+    echo " %F{244}[%D{%Y-%m-%dT%H:%M:%S}]%f"
+}
+
+## user@host, préfixé "[ssh]" en session distante (orange), couleur du host_seg elle-même bleue en
+## local / orange en ssh.
+_user_segment() {
+    local host_color=110 ssh_seg=""
+    if [ "$_CHEZMOI_IS_SSH" = "1" ]; then
+        host_color=208
+        ssh_seg="%F{208}[ssh]%f "
+    fi
+    echo " ${ssh_seg}%F{${host_color}}[%n@%m]%f"
+}
+
+_dir_segment() {
+    echo " %F{73}$(_prompt_path_segment)%f"
 }
 
 ## --- Timer de durée de commande ---
@@ -162,19 +209,43 @@ _duration_segment() {
     echo " %F{244}took ${out}%f"
 }
 
+## Dispatcheur des segments "plats" (thèmes default/minimal) : $2 = style git ("full" ou "compact").
+## Nom de segment inconnu -> silence (même fallback que le thème inconnu).
+_plain_segment_render() {
+    local name="$1" style="$2" ec="$3"
+    case "$name" in
+        time)     _time_segment ;;
+        user)     _user_segment ;;
+        dir)      _dir_segment ;;
+        git)      if [ "$style" = "compact" ]; then _git_segment_minimal; else _git_segment; fi ;;
+        pkg)      _pkg_version_segment ;;
+        node)     _node_segment ;;
+        duration) _duration_segment ;;
+        exitcode) _exitcode_segment "$ec" ;;
+    esac
+}
+
+## chezmoi:theme-begin default
+_git_segment() {
+    _git_refresh_cache
+    [ -z "$_git_cache_branch" ] && return
+    local dirty="" ab=""
+    [ -n "$_git_cache_dirty" ] && dirty=" %F{167}●%f"
+    [ -n "$_git_cache_ahead" ] && [ "$_git_cache_ahead" -gt 0 ] 2>/dev/null && ab="${ab} %F{108}↑${_git_cache_ahead}%f"
+    [ -n "$_git_cache_behind" ] && [ "$_git_cache_behind" -gt 0 ] 2>/dev/null && ab="${ab} %F{167}↓${_git_cache_behind}%f"
+    echo " on %F{179}⎇ $_git_cache_branch%f$dirty$ab"
+}
+
 _chezmoi_precmd_default() {
-    local time_seg="%F{244}[%D{%Y-%m-%dT%H:%M:%S}]%f"
-    local host_color=110 ssh_seg=""
-    if [ "$_CHEZMOI_IS_SSH" = "1" ]; then
-        host_color=208
-        ssh_seg="%F{208}[ssh]%f "
-    fi
-    local host_seg="${ssh_seg}%F{${host_color}}[%n@%m]%f"
-    local path_txt
-    path_txt="$(_prompt_path_segment)"
-    local dir_seg="%F{73}${path_txt}%f"
+    local ec=$?
+    local segs="${CHEZMOI_PROMPT_SEGMENTS:-time user dir git pkg duration}"
+    local body="" seg
+    for seg in ${=segs}; do
+        body="${body}$(_plain_segment_render "$seg" full "$ec")"
+    done
+    body="${body# }"
     PROMPT="
-${time_seg} ${host_seg} ${dir_seg}$(_git_segment)$(_pkg_version_segment)$(_duration_segment)
+${body}
 %F{108}❯%f "
 }
 ## chezmoi:theme-end default
@@ -189,14 +260,19 @@ _git_segment_minimal() {
     echo " %F{244}(${_git_cache_branch}${dirty})%f"
 }
 
-## Une ligne : chemin + git compact, rien d'autre (pas d'heure/host/version de paquet/durée).
+## Une ligne : segments par défaut "dir git" (compact), rien d'autre. "[ssh]" reste géré à part
+## (pas un segment) : c'est le seul indice ssh du thème minimal.
 _chezmoi_precmd_minimal() {
+    local ec=$?
     local ssh_seg=""
     [ "$_CHEZMOI_IS_SSH" = "1" ] && ssh_seg="%F{208}[ssh]%f "
-    local path_txt
-    path_txt="$(_prompt_path_segment)"
-    local dir_seg="%F{73}${path_txt}%f"
-    PROMPT="${ssh_seg}${dir_seg}$(_git_segment_minimal) %F{108}❯%f "
+    local segs="${CHEZMOI_PROMPT_SEGMENTS:-dir git}"
+    local body="" seg
+    for seg in ${=segs}; do
+        body="${body}$(_plain_segment_render "$seg" compact "$ec")"
+    done
+    body="${body# }"
+    PROMPT="${ssh_seg}${body} %F{108}❯%f "
 }
 ## chezmoi:theme-end minimal
 
@@ -244,9 +320,71 @@ _agnoster_status_segment() {
     _agnoster_segment 196 255 "✘ ${ec}"
 }
 
+_agnoster_time_segment() {
+    _agnoster_segment 244 255 "%D{%H:%M:%S}"
+}
+
+_agnoster_pkg_segment() {
+    local file version
+    if [ -f "package.json" ]; then
+        file="package.json"
+    elif [ -f "composer.json" ]; then
+        file="composer.json"
+    else
+        return
+    fi
+    version=$(grep -m1 '"version"' "$file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9._-]*')
+    [ -z "$version" ] && return
+    _agnoster_segment 108 0 "v$version"
+}
+
+_agnoster_node_segment() {
+    command -v node >/dev/null 2>&1 || return
+    { [ -f package.json ] || [ -f .nvmrc ]; } || return
+    local v
+    v=$(node -v 2>/dev/null) || return
+    [ -z "$v" ] && return
+    _agnoster_segment 70 255 "⬡ ${v}"
+}
+
+_agnoster_duration_segment() {
+    local dur=""
+    if [ -n "$_cmd_timer_start" ]; then
+        dur=$((SECONDS - _cmd_timer_start))
+    fi
+    _cmd_timer_start=""
+    [ -z "$dur" ] && return
+    [ "$dur" -lt 3 ] && return
+    local h=$((dur/3600)) m=$(((dur%3600)/60)) s=$((dur%60)) out=""
+    [ "$h" -gt 0 ] && out="${out}${h}h"
+    [ "$m" -gt 0 ] && out="${out}${m}m"
+    out="${out}${s}s"
+    _agnoster_segment 244 255 "took ${out}"
+}
+
+## Dispatcheur des segments "blocs" (thème agnoster). Nom de segment inconnu -> silence.
+_agnoster_segment_render() {
+    local name="$1" ec="$2"
+    case "$name" in
+        time)     _agnoster_time_segment ;;
+        user)     _agnoster_context_segment ;;
+        dir)      _agnoster_dir_segment ;;
+        git)      _agnoster_git_segment ;;
+        pkg)      _agnoster_pkg_segment ;;
+        node)     _agnoster_node_segment ;;
+        duration) _agnoster_duration_segment ;;
+        exitcode) _agnoster_status_segment "$ec" ;;
+    esac
+}
+
 _chezmoi_precmd_agnoster() {
     local ec=$?
-    PROMPT="$(_agnoster_context_segment)$(_agnoster_dir_segment)$(_agnoster_git_segment)$(_agnoster_status_segment "$ec") "
+    local segs="${CHEZMOI_PROMPT_SEGMENTS:-user dir git exitcode}"
+    local body="" seg
+    for seg in ${=segs}; do
+        body="${body}$(_agnoster_segment_render "$seg" "$ec")"
+    done
+    PROMPT="${body} "
 }
 ## chezmoi:theme-end agnoster
 

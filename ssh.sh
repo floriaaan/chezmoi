@@ -126,11 +126,28 @@ _ssh_prompt_theme_is_known() {
     return 1
 }
 
+## Ne garde, dans une liste de segments prompt.segments, que les noms reconnus (catalogue de
+## config.sh si chargé, sinon liste de secours) -- whitelist par-mot plutôt qu'échappement : un
+## nom de segment valide ne contient jamais de guillemet, donc le résultat est toujours sûr à
+## embarquer tel quel entre guillemets simples littéraux (cf. _ssh_build_payload). Même logique de
+## fallback silencieux qu'un nom de segment inconnu au rendu local (cf. prompt.sh).
+_ssh_prompt_segments_sanitize() {
+    emulate -L bash 2>/dev/null
+    local val="$1" known seg out=""
+    known="${_CHEZMOI_PROMPT_SEGMENT_NAMES:-time user dir git pkg node duration exitcode}"
+    for seg in $val; do
+        case " $known " in
+            *" $seg "*) out="${out:+$out }${seg}" ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
 ## Concatène le contenu des modules listés dans _SSH_CHEZMOI_MODULES (prompt -> variante shell
 ## distant, filtrée sur le thème actif via _ssh_prompt_filter_theme)
 _ssh_build_payload() {
     emulate -L bash 2>/dev/null
-    local mod file theme payload=""
+    local mod file theme segments payload=""
     for mod in $_SSH_CHEZMOI_MODULES; do
         if [ "$mod" = "prompt" ]; then
             if [ "$_SSH_CHEZMOI_SHELL" = "zsh" ]; then
@@ -141,11 +158,13 @@ _ssh_build_payload() {
             [ -f "$file" ] || continue
             theme="${CHEZMOI_PROMPT_THEME:-default}"
             _ssh_prompt_theme_is_known "$theme" || theme="default"
-            ## Le thème est imposé en dur (littéral) avant le fichier filtré : l'hôte distant n'a
-            ## pas accès à la config locale (pas de CHEZMOI_PROMPT_THEME dans l'environnement, cf.
-            ## note en tête de fichier sur AcceptEnv), et le fallback "${CHEZMOI_PROMPT_THEME:-default}"
-            ## du fichier lui-même ne s'applique que si la variable n'est pas déjà posée.
-            payload="${payload}CHEZMOI_PROMPT_THEME='${theme}'"$'\n'"$(_ssh_prompt_filter_theme "$file" "$theme")"$'\n'
+            segments="$(_ssh_prompt_segments_sanitize "${CHEZMOI_PROMPT_SEGMENTS:-}")"
+            ## Thème et segments sont imposés en dur (littéral) avant le fichier filtré : l'hôte
+            ## distant n'a pas accès à la config locale (pas de CHEZMOI_PROMPT_THEME/_SEGMENTS dans
+            ## l'environnement, cf. note en tête de fichier sur AcceptEnv), et les fallbacks
+            ## "${CHEZMOI_PROMPT_THEME:-default}"/"${CHEZMOI_PROMPT_SEGMENTS:-}" du fichier lui-même
+            ## ne s'appliquent que si la variable n'est pas déjà posée.
+            payload="${payload}CHEZMOI_PROMPT_THEME='${theme}'"$'\n'"CHEZMOI_PROMPT_SEGMENTS='${segments}'"$'\n'"$(_ssh_prompt_filter_theme "$file" "$theme")"$'\n'
             continue
         fi
         file="$CHEZMOI_DIR/$mod.sh"
