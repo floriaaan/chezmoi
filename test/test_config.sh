@@ -134,6 +134,33 @@ test_config_set_no_value_lists_choices_for_closed_key() {
     )
 }
 
+test_config_preview_returns_example_per_theme() {
+    local out
+    out=$(_chezmoi_config_preview prompt.theme default)
+    assert_match "main" "$out" "aperçu 'default': contient un exemple de branche"
+    out=$(_chezmoi_config_preview prompt.theme minimal)
+    assert_match "❯" "$out" "aperçu 'minimal': contient le caractère de prompt"
+    out=$(_chezmoi_config_preview prompt.theme agnoster)
+    assert_match "▶" "$out" "aperçu 'agnoster': contient le séparateur de segment"
+}
+
+test_config_preview_empty_for_free_form_key() {
+    local out
+    out=$(_chezmoi_config_preview ssh.modules "prompt gtag")
+    assert_eq "" "$out" "pas d'aperçu pour une clé à valeur libre"
+}
+
+test_config_set_no_value_includes_preview_for_each_theme() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(_chezmoi_config_set prompt.theme)
+        assert_match "❯" "$out" "la liste inclut un aperçu du rendu (pas que les noms)"
+        assert_match "▶" "$out" "la liste inclut l'aperçu du thème agnoster"
+    )
+}
+
 test_config_set_no_value_marks_active_choice() {
     (
         CHEZMOI_CONFIG_DIR=$(mktemp -d)

@@ -45,6 +45,28 @@ _chezmoi_config_choices() {
     esac
 }
 
+## Aperçu (statique, indépendant du répertoire/état git réels) d'un choix pour une clé donnée, vide
+## si la clé n'en a pas. Utilise des couleurs ANSI brutes (imprimées via "printf %b", même mécanisme
+## que _CONFIG_OK etc. plus haut) plutôt que les échappements PS1/PROMPT (\D{}/\u/\h, %F/%K) : ça
+## reste indépendant de bash vs zsh et s'affiche correctement avec un simple printf, pas seulement
+## une fois posé comme PS1 réel.
+_chezmoi_config_preview() {
+    local key="$1" choice="$2"
+    [ "$key" = "prompt.theme" ] || return 0
+    case "$choice" in
+        default)
+            printf '%b\n' "      \033[38;5;244m[2026-08-10T12:00:03]\033[0m \033[38;5;110m[user@host]\033[0m \033[38;5;73m~/dev/myproject\033[0m on \033[38;5;179m⎇ main\033[0m \033[38;5;167m●\033[0m \033[38;5;108m↑1\033[0m \033[38;5;108mv1.2.3\033[0m"
+            printf '%b\n' "      \033[38;5;108m❯\033[0m "
+            ;;
+        minimal)
+            printf '%b\n' "      \033[38;5;73m~/dev/myproject\033[0m \033[38;5;244m(main●)\033[0m \033[38;5;108m❯\033[0m "
+            ;;
+        agnoster)
+            printf '%b\n' "      \033[48;5;73m\033[38;5;0m ~/dev/myproject \033[0m\033[38;5;73m▶\033[0m\033[48;5;179m\033[38;5;0m ⎇ main ± \033[0m\033[38;5;179m▶\033[0m "
+            ;;
+    esac
+}
+
 ## Valeur persistée pour une clé (dernière ligne "clé=..." qui matche dans le fichier), sinon le défaut.
 _chezmoi_config_get() {
     local key="$1" val=""
@@ -100,6 +122,7 @@ _chezmoi_config_set() {
             else
                 printf "%b\n" "  ${c}"
             fi
+            _chezmoi_config_preview "$key" "$c"
         done
         return 0
     fi
@@ -163,7 +186,8 @@ Usage:
   chezmoi config                    liste les clés et leurs valeurs actuelles
   chezmoi config get <clé>          affiche la valeur d'une clé
   chezmoi config set <clé> <valeur> définit une clé (persisté + appliqué immédiatement)
-  chezmoi config set <clé>          sans valeur : liste les choix possibles (clés à choix fermé)
+  chezmoi config set <clé>          sans valeur : liste les choix possibles (clés à choix fermé),
+                                     avec un aperçu pour prompt.theme
   chezmoi config unset <clé>        réinitialise une clé à sa valeur par défaut
 
 Clés connues:
