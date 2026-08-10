@@ -181,16 +181,21 @@ test_ssh_build_payload_prompt_forces_theme_literal() {
     )
 }
 
+## Comparer minimal vs default n'est plus fiable en soi (les segments -- pkg/duration/time/user --
+## sont désormais communs aux 3 thèmes, donc les blocs par-thème filtrés sont de taille proche) :
+## on compare plutôt le payload filtré (un seul bloc thème) au fichier prompt.sh source non filtré
+## (les 3 blocs thème), qui doit rester strictement plus gros quel que soit le thème actif.
 test_ssh_build_payload_prompt_theme_reduces_size() {
     (
         _SSH_CHEZMOI_MODULES="prompt"
-        local payload_minimal payload_default
-        CHEZMOI_PROMPT_THEME="minimal"
-        payload_minimal=$(_ssh_build_payload)
-        CHEZMOI_PROMPT_THEME="default"
-        payload_default=$(_ssh_build_payload)
-        assert_success "filtrer sur le thème actif réduit la charge utile ssh" \
-            -- test "${#payload_minimal}" -lt "${#payload_default}"
+        local payload_filtered unfiltered_size theme
+        unfiltered_size=$(wc -c < "$_test_repo_dir/prompt.sh")
+        for theme in default minimal agnoster; do
+            CHEZMOI_PROMPT_THEME="$theme"
+            payload_filtered=$(_ssh_build_payload)
+            assert_success "filtrer sur le thème '${theme}' réduit la charge utile ssh vs le fichier source non filtré" \
+                -- test "${#payload_filtered}" -lt "$unfiltered_size"
+        done
     )
 }
 
@@ -202,6 +207,41 @@ test_ssh_build_payload_prompt_theme_sanitizes_quote() {
         out=$(_ssh_build_payload)
         assert_match "CHEZMOI_PROMPT_THEME='default'" "$out" "une valeur de thème avec un guillemet simple retombe sur 'default' (pas d'injection dans le littéral)"
     )
+}
+
+test_ssh_build_payload_prompt_forces_segments_literal() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        CHEZMOI_PROMPT_SEGMENTS="time dir git node"
+        local out
+        out=$(_ssh_build_payload)
+        assert_match "CHEZMOI_PROMPT_SEGMENTS='time dir git node'" "$out" "payload ssh: la liste de segments active est imposée en littéral"
+    )
+}
+
+test_ssh_build_payload_prompt_segments_sanitizes_unknown_tokens() {
+    (
+        _SSH_CHEZMOI_MODULES="prompt"
+        CHEZMOI_PROMPT_SEGMENTS="dir bogus git"
+        local out
+        out=$(_ssh_build_payload)
+        assert_match "CHEZMOI_PROMPT_SEGMENTS='dir git'" "$out" "payload ssh: un nom de segment inconnu est retiré de la liste embarquée"
+    )
+}
+
+test_ssh_prompt_segments_sanitize_strips_quote_injection() {
+    local out
+    ## "git' ; echo pwned #" est un seul token (une fois word-splitté sur les espaces, ça donne
+    ## "git'", ";", "echo", "pwned", "#") : aucun ne matche un nom de segment connu -> tous retirés,
+    ## seul "dir" (bare word connu) survit.
+    out=$(_ssh_prompt_segments_sanitize "dir git' ; echo pwned #")
+    assert_eq "dir" "$out" "un token contenant un guillemet/métacaractère shell n'est jamais un nom de segment connu -> retiré"
+}
+
+test_ssh_prompt_segments_sanitize_keeps_known_order() {
+    local out
+    out=$(_ssh_prompt_segments_sanitize "node time dir")
+    assert_eq "node time dir" "$out" "l'ordre demandé est préservé pour les segments connus"
 }
 
 test_ssh_prompt_theme_is_known_accepts_registered_themes() {

@@ -4,16 +4,24 @@
 ## l'applique aussi immédiatement à la session en cours (pas besoin de relancer le shell).
 ##
 ## Clés connues aujourd'hui :
-##   prompt.theme   thème du prompt : "default", "minimal" ou "agnoster" (cf. prompt.sh)
-##   ssh.modules    modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
+##   prompt.theme      thème du prompt : "default", "minimal" ou "agnoster" (cf. prompt.sh)
+##   prompt.segments   liste ordonnée (espacée) des segments affichés par le prompt, quel que soit
+##                     le thème actif ; vide -> liste par défaut du thème (cf. prompt.sh)
+##   ssh.modules       modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
 ##
 ## "chezmoi config set <clé>" sans valeur, pour une clé à choix fermé (ex: prompt.theme), liste les
-## valeurs possibles au lieu d'échouer (cf. _chezmoi_config_choices).
+## valeurs possibles au lieu d'échouer (cf. _chezmoi_config_choices). prompt.segments est une clé à
+## valeur libre (la combinatoire des listes n'est pas énumérable) mais bénéficie du même traitement
+## que prompt.theme sans valeur : liste le catalogue de segments valides plutôt que d'échouer
+## (cf. _chezmoi_config_set, cas spécial avant le fallback générique clé-libre).
 
 CHEZMOI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi"
 CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
 
-_CHEZMOI_CONFIG_KEYS="prompt.theme ssh.modules"
+_CHEZMOI_CONFIG_KEYS="prompt.theme prompt.segments ssh.modules"
+
+## Catalogue des segments valides pour prompt.segments (cf. prompt.sh pour le détail de chacun).
+_CHEZMOI_PROMPT_SEGMENT_NAMES="time user dir git pkg node duration exitcode"
 
 _CONFIG_OK='\033[38;5;108m'
 _CONFIG_WARN='\033[38;5;179m'
@@ -31,8 +39,9 @@ _chezmoi_config_is_known() {
 
 _chezmoi_config_default() {
     case "$1" in
-        prompt.theme) printf '%s' "default" ;;
-        ssh.modules)  printf '%s' "prompt git-aliases gtag" ;;
+        prompt.theme)    printf '%s' "default" ;;
+        prompt.segments) printf '%s' "" ;;
+        ssh.modules)     printf '%s' "prompt git-aliases gtag" ;;
     esac
 }
 
@@ -79,8 +88,9 @@ _chezmoi_config_apply() {
     local key="$1" val
     val="$(_chezmoi_config_get "$key")"
     case "$key" in
-        prompt.theme) CHEZMOI_PROMPT_THEME="$val" ;;
-        ssh.modules)  _SSH_CHEZMOI_MODULES="$val" ;;
+        prompt.theme)    CHEZMOI_PROMPT_THEME="$val" ;;
+        prompt.segments) CHEZMOI_PROMPT_SEGMENTS="$val" ;;
+        ssh.modules)     _SSH_CHEZMOI_MODULES="$val" ;;
     esac
 }
 
@@ -109,6 +119,17 @@ _chezmoi_config_set() {
         return 1
     fi
     if [ -z "$val" ]; then
+        ## prompt.segments : valeur libre (liste), donc pas de combinatoire énumérable via
+        ## _chezmoi_config_choices, mais on liste quand même le catalogue de noms valides plutôt
+        ## que d'échouer bêtement -- même confort que prompt.theme sans valeur.
+        if [ "$key" = "prompt.segments" ]; then
+            current="$(_chezmoi_config_get "$key")"
+            printf "%b\n" "${_CONFIG_INFO}chezmoi config: prompt.segments = liste ordonnée (espacée) de segments${_CONFIG_RESET}"
+            printf "%b\n" "  ${_CONFIG_OK}actuel${_CONFIG_RESET} = ${current:-<vide, défaut du thème>}"
+            printf "%b\n" "  ${_CONFIG_INFO}segments valides:${_CONFIG_RESET} ${_CHEZMOI_PROMPT_SEGMENT_NAMES}"
+            printf "%b\n" "  ${_CONFIG_INFO}exemple:${_CONFIG_RESET} chezmoi config set prompt.segments \"time dir git node\""
+            return 0
+        fi
         choices="$(_chezmoi_config_choices "$key")"
         if [ -z "$choices" ]; then
             printf "%b\n" "${_CONFIG_ERR}chezmoi config: usage: chezmoi config set <clé> <valeur>${_CONFIG_RESET}" >&2
@@ -187,13 +208,16 @@ Usage:
   chezmoi config get <clé>          affiche la valeur d'une clé
   chezmoi config set <clé> <valeur> définit une clé (persisté + appliqué immédiatement)
   chezmoi config set <clé>          sans valeur : liste les choix possibles (clés à choix fermé),
-                                     avec un aperçu pour prompt.theme
+                                     avec un aperçu pour prompt.theme ; pour prompt.segments,
+                                     liste le catalogue de segments valides
   chezmoi config unset <clé>        réinitialise une clé à sa valeur par défaut
 
 Clés connues:
-  prompt.theme    thème du prompt : "default" (2 lignes, complet), "minimal" (1 ligne, compact)
-                  ou "agnoster" (équivalent oh-my-zsh, blocs de couleur, sans nerd font)
-  ssh.modules     modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
+  prompt.theme     thème du prompt : "default" (2 lignes, complet), "minimal" (1 ligne, compact)
+                   ou "agnoster" (équivalent oh-my-zsh, blocs de couleur, sans nerd font)
+  prompt.segments  liste ordonnée (espacée) des segments affichés, ex: "time dir git node".
+                   Vide -> liste par défaut du thème actif. Catalogue: ${_CHEZMOI_PROMPT_SEGMENT_NAMES}
+  ssh.modules      modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
 EOF
             ;;
         *)

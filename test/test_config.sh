@@ -189,3 +189,48 @@ test_config_cmd_set_no_value_lists_choices() {
             -- _chezmoi_config_cmd set prompt.theme
     )
 }
+
+test_config_default_prompt_segments_is_empty() {
+    (
+        CHEZMOI_CONFIG_FILE=$(mktemp -u)
+        local out
+        out=$(_chezmoi_config_get prompt.segments)
+        assert_eq "" "$out" "prompt.segments sans fichier de config = défaut vide (liste du thème)"
+    )
+}
+
+test_config_set_prompt_segments_persists_and_applies() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        _chezmoi_config_set prompt.segments "time dir git node" >/dev/null
+        local out
+        out=$(_chezmoi_config_get prompt.segments)
+        assert_eq "time dir git node" "$out" "chezmoi config set persiste prompt.segments"
+        assert_eq "time dir git node" "$CHEZMOI_PROMPT_SEGMENTS" "chezmoi config set répercute tout de suite sur CHEZMOI_PROMPT_SEGMENTS"
+    )
+}
+
+test_config_set_prompt_segments_no_value_lists_catalog_instead_of_failing() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(_chezmoi_config_set prompt.segments)
+        assert_success "chezmoi config set prompt.segments sans valeur réussit (liste le catalogue, n'échoue pas)" \
+            -- _chezmoi_config_set prompt.segments
+        assert_match "time" "$out" "le catalogue listé contient le segment 'time'"
+        assert_match "node" "$out" "le catalogue listé contient le segment 'node'"
+        assert_match "exitcode" "$out" "le catalogue listé contient le segment 'exitcode'"
+    )
+}
+
+test_config_list_shows_prompt_segments_key() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(_chezmoi_config_list)
+        assert_match "prompt.segments" "$out" "la liste affiche prompt.segments"
+    )
+}

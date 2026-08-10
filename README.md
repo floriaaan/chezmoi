@@ -8,11 +8,11 @@ Built with zero-install constraint in mind: no ability to install packages (no s
 
 Ordre de chargement (barrel `chezmoi.sh`) : `config → history → z → git-aliases → gtag → ports → extract → ssh → completion → colors → prompt(.sh|.zsh)`.
 
-- **config.sh** — `chezmoi config` : préférences persistantes (`~/.config/chezmoi/config`, ou `$XDG_CONFIG_HOME/chezmoi/config`). Sourcé en premier pour que `ssh.sh`/`prompt.sh`/`prompt.zsh` lisent la valeur dès le démarrage. Clés connues : `prompt.theme` (`default`/`minimal`/`agnoster`, cf. `prompt.sh`), `ssh.modules` (modules embarqués par le wrapper ssh, défaut `"prompt git-aliases gtag"`). `chezmoi config set` persiste et applique tout de suite (pas besoin de relancer le shell) ; `chezmoi config set <clé>` sans valeur liste les choix possibles pour une clé à choix fermé (le choix actif est marqué) au lieu d'échouer — pour `prompt.theme`, chaque choix est accompagné d'un aperçu coloré de son rendu.
+- **config.sh** — `chezmoi config` : préférences persistantes (`~/.config/chezmoi/config`, ou `$XDG_CONFIG_HOME/chezmoi/config`). Sourcé en premier pour que `ssh.sh`/`prompt.sh`/`prompt.zsh` lisent la valeur dès le démarrage. Clés connues : `prompt.theme` (`default`/`minimal`/`agnoster`, cf. `prompt.sh`), `prompt.segments` (liste ordonnée/espacée des segments affichés, ex: `"time dir git node"`, appliquée quel que soit le thème actif — vide = liste par défaut du thème), `ssh.modules` (modules embarqués par le wrapper ssh, défaut `"prompt git-aliases gtag"`). `chezmoi config set` persiste et applique tout de suite (pas besoin de relancer le shell) ; `chezmoi config set <clé>` sans valeur liste les choix possibles pour une clé à choix fermé (le choix actif est marqué) au lieu d'échouer — pour `prompt.theme`, chaque choix est accompagné d'un aperçu coloré de son rendu ; pour `prompt.segments`, le catalogue de segments valides est listé.
 - **history.sh** — historique partagé, dédupliqué (`erasedups`/`HIST_IGNORE_ALL_DUPS`), avec timestamps, écrit immédiatement (synchro temps réel entre terminaux). Ignore les commandes préfixées d'un espace et les commandes triviales (`ls`, `cd`, `pwd`, `exit`, `clear`, `history`). Recherche par préfixe sur ↑/↓ (bindings `\e[A`/`\eOA` etc, les deux variantes de séquence selon le mode du terminal).
 - **z.sh** — mini `z` jump command. Tracks visited dirs (`~/.zdirs`), ranks by frequency, `z <pattern>` cd to best match. Tab-completion included (bash + zsh via `bashcompinit`).
-- **prompt.sh** — powerlevel10k-style PS1 for bash, no nerd fonts, three themes selectable via `chezmoi config set prompt.theme <default|minimal|agnoster>`: `default` shows time, user@host, cwd (troncature intelligente sur segments entiers, `_PROMPT_PATH_MAXLEN=60`), git branch + dirty marker + ahead/behind, package version (`package.json`/`composer.json`), command duration if >=3s ; `minimal` is a single line, cwd + compact git only ; `agnoster` is an oh-my-zsh "agnoster"-equivalent (full-color segment blocks — context/dir/git/exit status — each closed by a `▶`, no powerline/nerd font needed). Repère `[ssh]` orange en session distante (les trois thèmes).
-- **prompt.zsh** — same prompt + themes, zsh flavor (`precmd` + `PROMPT_SUBST`).
+- **prompt.sh** — powerlevel10k-style PS1 for bash, no nerd fonts, three themes selectable via `chezmoi config set prompt.theme <default|minimal|agnoster>`: `default` shows segments `time user dir git pkg duration` on two lines ; `minimal` is a single line, `dir git` (compact git) only ; `agnoster` is an oh-my-zsh "agnoster"-equivalent (full-color segment blocks, each closed by a `▶`, no powerline/nerd font needed), segments `user dir git exitcode`. Every theme's segment list is overridable, in any order, via `chezmoi config set prompt.segments "<liste>"` — catalogue : `time`, `user` (user@host, `[ssh]`-prefixed remotely), `dir` (troncature intelligente sur segments entiers, `_PROMPT_PATH_MAXLEN=60`), `git` (branche + dirty + ahead/behind, rendu compact en thème minimal), `pkg` (version `package.json`/`composer.json`), `node` (`node -v`, si projet node détecté), `duration` (>=3s), `exitcode` (code de sortie si échec). Nom de segment inconnu → ignoré silencieusement. Le repère `[ssh]` du thème minimal reste géré à part (pas un segment).
+- **prompt.zsh** — same prompt + themes + segments, zsh flavor (`precmd` + `PROMPT_SUBST`).
 - **git-aliases.sh** — short git aliases (`ga`, `gc`, `gp`, `gco`, `gcb`, `glog`, `gs`, `grh`, `gcp`, `gm`, `grb`, etc).
 - **gtag.sh** — `gtag` command: create/push semver git tags. Supports `major|minor|patch`, `--rc`, `--dev`, `--prefix=`, `--force`. No args shows tag tree (prod/rc/dev). Branch guard: `--rc` expects branch `staging`, everything else (prod, `--dev`) expects `main`/`master` ; confirmations default to yes (`[Y/n]`, Enter = oui).
 - **ports.sh** — `ports [PORT|PATTERN]` liste les sockets en écoute (TCP+UDP), via `ss` (fallback `netstat`). `kport <PORT> [--force]` tue le process associé, avec confirmation (refuse PID 1 et les process d'un autre utilisateur, sauf root).
@@ -40,6 +40,9 @@ chezmoi config                          # list preferences (prompt theme, ssh mo
 chezmoi config set ssh.modules "prompt gtag"   # persisted + applied immediately
 chezmoi config set prompt.theme minimal        # switch to the 1-line prompt, persisted + applied on the very next prompt
 chezmoi config set prompt.theme                # no value: lists the available themes (active one marked)
+chezmoi config set prompt.segments "time dir git node"   # customize which segments show, in any order, on any theme
+chezmoi config set prompt.segments             # no value: lists the segment catalogue
+chezmoi config unset prompt.segments           # back to the active theme's default segment list
 chezmoi help       # usage
 
 z <pattern>        # jump to frequent dir matching pattern
@@ -72,4 +75,4 @@ CI (`.github/workflows/ci.yml`) runs `shellcheck` and the test suite under both 
 
 ## Version
 
-See `VERSION` file. Current: 1.5.0
+See `VERSION` file. Current: 1.6.0

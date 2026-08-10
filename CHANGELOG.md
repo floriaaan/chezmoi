@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0
+- feat: `prompt.sh`/`prompt.zsh` — nouvelle clé `prompt.segments` (`chezmoi config set prompt.segments "<liste>"`) : liste ordonnée/espacée des segments affichés par le prompt, applicable aux trois thèmes (`default`/`minimal`/`agnoster`), en plus ou à la place de leur liste par défaut (`time user dir git pkg duration` / `dir git` / `user dir git exitcode`) ; nom de segment inconnu ignoré silencieusement (même fallback que pour un thème inconnu)
+- feat: `prompt.sh`/`prompt.zsh` — deux nouveaux segments : `node` (version node active via `node -v`, affiché seulement si `node` est dispo et le répertoire courant contient `package.json`/`.nvmrc`) et `exitcode` (code de sortie de la commande précédente si non nul, généralisé depuis le thème `agnoster` vers les trois thèmes)
+- feat: `config.sh` — `chezmoi config set prompt.segments` sans valeur liste le catalogue des segments valides (`time user dir git pkg node duration exitcode`) et la valeur actuelle, au lieu d'échouer avec l'usage générique (clé à valeur libre, mais bénéficie du même confort que `prompt.theme`)
+- feat: `ssh.sh` — `prompt.segments` est désormais propagé à l'hôte distant (imposé en littéral dans la charge utile, comme `prompt.theme`), whitelisté par nom de segment reconnu (`_ssh_prompt_segments_sanitize`) plutôt qu'échappé, pour rester sûr même si la valeur configurée contient un guillemet ou un métacaractère shell
+- refactor: `prompt.sh`/`prompt.zsh` — les segments (`time`/`user`/`dir`/`pkg`/`duration`/...) qui n'étaient auparavant rendus que par le thème `default` (et son homologue `agnoster` en bloc de couleur) sont désormais des fonctions communes aux trois thèmes, pour pouvoir être sélectionnés par n'importe quel thème via `prompt.segments`
+
 ## 1.5.0
 - feat: `config.sh` — `chezmoi config` (get/set/unset/list) : préférences persistantes (`~/.config/chezmoi/config`, ou `$XDG_CONFIG_HOME/chezmoi/config`) pour le thème du prompt (`prompt.theme`) et les modules embarqués par le wrapper ssh (`ssh.modules`, appliqué immédiatement à `_SSH_CHEZMOI_MODULES`, sans relancer le shell) ; sourcé en premier dans le barrel pour que `ssh.sh`/`prompt.sh`/`prompt.zsh` lisent la valeur dès le démarrage
 - feat: `chezmoi config set <clé>` sans valeur liste les choix possibles pour une clé à choix fermé (`prompt.theme` : `default`/`minimal`/`agnoster`, avec le choix actif marqué et un aperçu coloré du rendu de chaque thème) au lieu d'échouer avec un simple message d'usage ; inchangé pour une clé à valeur libre (`ssh.modules`)
