@@ -65,8 +65,32 @@ _chezmoi_complete() {
         return
     fi
 
+    if [ "${COMP_WORDS[1]}" = "themes" ]; then
+        if [ "$COMP_CWORD" -eq 2 ]; then
+            local choices
+            if declare -f _chezmoi_config_choices >/dev/null 2>&1; then
+                choices="$(_chezmoi_config_choices prompt.theme)"
+            else
+                choices="default minimal agnoster floriaaan"
+            fi
+            COMPREPLY=($(compgen -W "$choices list unset help" -- "$cur"))
+            return
+        fi
+        return
+    fi
+
+    if [ "${COMP_WORDS[1]}" = "prompt" ]; then
+        if [ "$COMP_CWORD" -ge 2 ]; then
+            local segs
+            segs="${_CHEZMOI_PROMPT_SEGMENT_NAMES:-time user dir git pkg node duration exitcode docker battery}"
+            COMPREPLY=($(compgen -W "$segs list unset help" -- "$cur"))
+            return
+        fi
+        return
+    fi
+
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "update reload version doctor config modules bench help" -- "$cur"))
+        COMPREPLY=($(compgen -W "update reload version doctor config modules themes prompt bench help" -- "$cur"))
         return
     fi
 }

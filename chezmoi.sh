@@ -106,6 +106,14 @@ chezmoi() {
             shift
             _chezmoi_modules_cmd "$@"
             ;;
+        themes)
+            shift
+            _chezmoi_themes_cmd "$@"
+            ;;
+        prompt)
+            shift
+            _chezmoi_prompt_cmd "$@"
+            ;;
         bench)
             _chezmoi_bench
             ;;
@@ -120,6 +128,8 @@ Usage:
   chezmoi doctor     vérifie les dépendances et l'état des modules
   chezmoi config     préférences persistantes (thème du prompt, modules ssh) ; 'chezmoi config help' pour le détail
   chezmoi modules    active/désactive des modules du barrel ; 'chezmoi modules help' pour le détail
+  chezmoi themes     raccourci pour prompt.theme (liste/bascule le thème) ; 'chezmoi themes help' pour le détail
+  chezmoi prompt     raccourci pour prompt.segments (liste/définit les segments) ; 'chezmoi prompt help' pour le détail
   chezmoi bench      mesure le temps de chargement de chaque module du barrel
   chezmoi help       affiche cette aide
 EOF
@@ -291,11 +301,84 @@ Usage:
 
 Modules: ${_CHEZMOI_MODULES_LIST}
 'config' ne peut pas être désactivé (porte la liste des modules désactivés).
+
+Équivalent : chezmoi config set modules.disabled "<liste des modules désactivés>"
+             chezmoi config get modules.disabled
 EOF
             ;;
         *)
             printf "%b\n" "${_CHEZMOI_ERR}chezmoi modules: sous-commande inconnue '${1}' (essaie 'chezmoi modules help')${_CHEZMOI_RESET}" >&2
             return 1
+            ;;
+    esac
+}
+
+## --- chezmoi themes : raccourci pour la clé de config prompt.theme (liste/aperçu/bascule) ---
+## Délègue entièrement à config.sh (_chezmoi_config_set/_chezmoi_config_unset) : même
+## comportement, mêmes garde-fous (thème inconnu -> liste les choix), juste un point d'entrée plus
+## court. "chezmoi config set prompt.theme ..." reste équivalent et continue de fonctionner.
+_chezmoi_themes_cmd() {
+    if ! declare -f _chezmoi_config_set >/dev/null 2>&1; then
+        printf "%b\n" "${_CHEZMOI_ERR}chezmoi themes: module config non chargé${_CHEZMOI_RESET}" >&2
+        return 1
+    fi
+    case "$1" in
+        ""|list)
+            _chezmoi_config_set prompt.theme
+            ;;
+        unset)
+            _chezmoi_config_unset prompt.theme
+            ;;
+        help|-h|--help)
+            cat <<EOF
+chezmoi themes - raccourci pour la clé de config prompt.theme
+
+Usage:
+  chezmoi themes             liste les thèmes disponibles avec aperçu (thème actif marqué)
+  chezmoi themes <thème>     bascule sur ce thème (persisté + appliqué immédiatement)
+  chezmoi themes unset       revient au thème par défaut
+
+Équivalent : chezmoi config set prompt.theme [<thème>]
+             chezmoi config unset prompt.theme
+EOF
+            ;;
+        *)
+            _chezmoi_config_set prompt.theme "$1"
+            ;;
+    esac
+}
+
+## --- chezmoi prompt : raccourci pour la clé de config prompt.segments (liste/définit) ---
+## Même principe que "chezmoi themes" ci-dessus, pour prompt.segments. Les arguments sont joints
+## par un espace ("$*") plutôt qu'exiger un seul argument pré-guillemeté : "chezmoi prompt time
+## dir git" fonctionne aussi bien que "chezmoi prompt \"time dir git\"".
+_chezmoi_prompt_cmd() {
+    if ! declare -f _chezmoi_config_set >/dev/null 2>&1; then
+        printf "%b\n" "${_CHEZMOI_ERR}chezmoi prompt: module config non chargé${_CHEZMOI_RESET}" >&2
+        return 1
+    fi
+    case "$1" in
+        ""|list)
+            _chezmoi_config_set prompt.segments
+            ;;
+        unset)
+            _chezmoi_config_unset prompt.segments
+            ;;
+        help|-h|--help)
+            cat <<EOF
+chezmoi prompt - raccourci pour la clé de config prompt.segments
+
+Usage:
+  chezmoi prompt                          liste le catalogue de segments et la valeur actuelle
+  chezmoi prompt <segment> [segment...]   définit la liste de segments affichés (persisté + appliqué)
+  chezmoi prompt unset                    revient à la liste par défaut du thème actif
+
+Équivalent : chezmoi config set prompt.segments "<liste>"
+             chezmoi config unset prompt.segments
+EOF
+            ;;
+        *)
+            _chezmoi_config_set prompt.segments "$*"
             ;;
     esac
 }

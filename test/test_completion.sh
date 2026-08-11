@@ -62,6 +62,35 @@ test_task_completion_hookup_noop_when_task_absent() {
     )
 }
 
+## --- chezmoi themes / chezmoi prompt : complétion ---
+
+test_chezmoi_themes_completion_lists_theme_choices() {
+    COMP_WORDS=(chezmoi themes "")
+    COMP_CWORD=2
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "minimal" "${COMPREPLY[*]}" "chezmoi themes <TAB> propose minimal"
+    assert_match "agnoster" "${COMPREPLY[*]}" "chezmoi themes <TAB> propose agnoster"
+}
+
+test_chezmoi_prompt_completion_lists_segment_names() {
+    COMP_WORDS=(chezmoi prompt "")
+    COMP_CWORD=2
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "battery" "${COMPREPLY[*]}" "chezmoi prompt <TAB> propose le segment battery"
+    assert_match "docker" "${COMPREPLY[*]}" "chezmoi prompt <TAB> propose le segment docker"
+}
+
+test_chezmoi_top_level_completion_includes_themes_and_prompt() {
+    COMP_WORDS=(chezmoi "")
+    COMP_CWORD=1
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "themes" "${COMPREPLY[*]}" "chezmoi <TAB> propose themes"
+    assert_match "prompt" "${COMPREPLY[*]}" "chezmoi <TAB> propose prompt"
+}
+
 ## --- docker : eval "$(docker completion <shell>)" si le binaire est présent, no-op sinon ---
 
 test_docker_completion_hookup_installs_completion_when_docker_present() {

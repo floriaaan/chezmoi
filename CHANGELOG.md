@@ -10,6 +10,7 @@
 - feat: `chezmoi.sh` — `chezmoi modules [list|disable <module>|enable <module>]` : active/désactive un module du barrel sans éditer `chezmoi.sh` (façon apt/brew), persisté via la nouvelle clé de config `modules.disabled` ; `config` n'est jamais désactivable (il porte cette clé lui-même)
 - feat: `chezmoi.sh` — `chezmoi bench` : mesure le temps de chargement (source) de chaque module du barrel, dans l'ordre réel de chargement, dans un sous-shell dédié (ne pollue jamais la session courante)
 - feat: `chezmoi.sh` — barrel étendu avec `docker`/`net` (entre `ssh` et `completion`)
+- feat: `chezmoi.sh` — `chezmoi themes [<thème>|unset]` et `chezmoi prompt [<segment>...|unset]` : raccourcis en lecture/écriture pour `prompt.theme`/`prompt.segments`, délégués entièrement à `config.sh` (mêmes garde-fous, même persistance) — `chezmoi themes minimal` et `chezmoi config set prompt.theme minimal` sont deux chemins équivalents vers le même état, dans les deux sens ; `chezmoi modules disable/enable` était déjà l'équivalent de `chezmoi config set modules.disabled "<liste>"`, documenté et croisé dans `chezmoi modules help`
 
 ## 1.8.0
 - feat: `completion.sh` — complétion go-task : `eval "$(task --completion bash|zsh)"` si le binaire `task` est présent sur la machine (aucune install forcée), pour bénéficier de la complétion officielle de Taskfile

@@ -161,6 +161,103 @@ test_chezmoi_barrel_skips_disabled_module() {
     )
 }
 
+## --- chezmoi themes (raccourci pour prompt.theme) ---
+
+test_chezmoi_themes_list_shows_all_choices() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(chezmoi themes)
+        assert_match "default" "$out" "chezmoi themes liste 'default'"
+        assert_match "minimal" "$out" "chezmoi themes liste 'minimal'"
+        assert_match "agnoster" "$out" "chezmoi themes liste 'agnoster'"
+        assert_match "floriaaan" "$out" "chezmoi themes liste 'floriaaan'"
+    )
+}
+
+test_chezmoi_themes_set_persists_and_applies() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes minimal >/dev/null
+        assert_eq "minimal" "$(_chezmoi_config_get prompt.theme)" "chezmoi themes minimal: persisté dans le fichier de config"
+        assert_eq "minimal" "$CHEZMOI_PROMPT_THEME" "chezmoi themes minimal: appliqué tout de suite (CHEZMOI_PROMPT_THEME)"
+    )
+}
+
+test_chezmoi_themes_matches_config_set_equivalent() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes agnoster >/dev/null
+        local via_themes
+        via_themes="$(_chezmoi_config_get prompt.theme)"
+        chezmoi config set prompt.theme minimal >/dev/null
+        local via_config
+        via_config="$(_chezmoi_config_get prompt.theme)"
+        assert_eq "agnoster" "$via_themes" "chezmoi themes <thème> écrit bien prompt.theme"
+        assert_eq "minimal" "$via_config" "chezmoi config set prompt.theme reste un équivalent fonctionnel"
+    )
+}
+
+test_chezmoi_themes_unset_resets_to_default() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes minimal >/dev/null
+        chezmoi themes unset >/dev/null
+        assert_eq "default" "$(_chezmoi_config_get prompt.theme)" "chezmoi themes unset revient au défaut"
+    )
+}
+
+test_chezmoi_themes_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "themes" "$out" "chezmoi help mentionne themes"
+}
+
+## --- chezmoi prompt (raccourci pour prompt.segments) ---
+
+test_chezmoi_prompt_list_shows_segment_catalog() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(chezmoi prompt)
+        assert_match "time" "$out" "chezmoi prompt liste le segment 'time'"
+        assert_match "battery" "$out" "chezmoi prompt liste le segment 'battery'"
+        assert_match "docker" "$out" "chezmoi prompt liste le segment 'docker'"
+    )
+}
+
+test_chezmoi_prompt_set_joins_bare_args_with_space() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi prompt time dir git >/dev/null
+        assert_eq "time dir git" "$(_chezmoi_config_get prompt.segments)" \
+            "chezmoi prompt time dir git (sans guillemets) persiste 'time dir git'"
+        assert_eq "time dir git" "$CHEZMOI_PROMPT_SEGMENTS" "chezmoi prompt ... appliqué tout de suite"
+    )
+}
+
+test_chezmoi_prompt_unset_resets_to_theme_default() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi prompt dir >/dev/null
+        chezmoi prompt unset >/dev/null
+        assert_eq "" "$(_chezmoi_config_get prompt.segments)" "chezmoi prompt unset revient au défaut (vide, liste du thème)"
+    )
+}
+
+test_chezmoi_prompt_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "prompt" "$out" "chezmoi help mentionne prompt"
+}
+
 ## --- chezmoi bench ---
 
 test_chezmoi_bench_runs_and_reports_total() {
