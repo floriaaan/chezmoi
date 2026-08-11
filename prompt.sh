@@ -27,6 +27,9 @@
 ##             package.json/.nvmrc présent dans le répertoire courant
 ##   duration  durée de la commande précédente si >=3s
 ##   exitcode  code de sortie de la commande précédente si non nul
+##   docker    contexte docker actif ("docker context show"), masqué si absent/"default" (bruit)
+##   battery   charge batterie (Linux /sys/class/power_supply, macOS "pmset -g batt"), masqué si
+##             pas de batterie (desktop) ; icône éclair si en charge
 ## Le repère "[ssh]" du thème minimal reste géré à part (pas un segment) : c'est le seul indice
 ## ssh de ce thème compact, indépendant du segment "user" (qui affiche le user@host complet).
 ##
@@ -158,6 +161,80 @@ _node_segment() {
     echo " \[\033[38;5;70m\]⬡ ${v}\[\033[0m\]"
 }
 
+_DOCKER_CACHE_TTL=5
+_docker_cache_time=0
+_docker_cache_ctx=""
+
+## "docker context show" fait un aller-retour disque/socket -- mis en cache comme le segment git
+## (_GIT_CACHE_TTL) pour ne pas payer son coût à chaque rendu de prompt.
+_docker_refresh_cache() {
+    local now
+    now=$(date +%s)
+    [ $((now - _docker_cache_time)) -lt "$_DOCKER_CACHE_TTL" ] && return
+    _docker_cache_time=$now
+    if command -v docker >/dev/null 2>&1; then
+        _docker_cache_ctx=$(docker context show 2>/dev/null)
+    else
+        _docker_cache_ctx=""
+    fi
+}
+
+## Contexte docker actif, masqué si docker absent ou si le contexte est "default" (bruit -- la
+## plupart des sessions locales n'ont jamais changé de contexte).
+_docker_segment() {
+    _docker_refresh_cache
+    if [ -z "$_docker_cache_ctx" ] || [ "$_docker_cache_ctx" = "default" ]; then
+        return
+    fi
+    echo " \[\033[38;5;110m\]🐳 ${_docker_cache_ctx}\[\033[0m\]"
+}
+
+## Batterie : Linux (/sys/class/power_supply/BAT*), macOS (pmset -g batt). Rien si pas de
+## batterie détectée (desktop). Sur stdout : "<pourcentage>\t<Charging|Discharging|...>".
+_battery_read_linux() {
+    local bat cap bstatus
+    for bat in /sys/class/power_supply/BAT*; do
+        [ -d "$bat" ] || continue
+        cap=$(cat "$bat/capacity" 2>/dev/null)
+        bstatus=$(cat "$bat/status" 2>/dev/null)
+        [ -n "$cap" ] || continue
+        printf '%s\t%s' "$cap" "$bstatus"
+        return 0
+    done
+    return 1
+}
+
+_battery_read_macos() {
+    command -v pmset >/dev/null 2>&1 || return 1
+    local line pct bstatus
+    line=$(pmset -g batt 2>/dev/null | grep -m1 '%')
+    [ -z "$line" ] && return 1
+    pct=$(printf '%s' "$line" | grep -oE '[0-9]+%' | head -n1 | tr -d '%')
+    [ -z "$pct" ] && return 1
+    bstatus="Discharging"
+    printf '%s' "$line" | grep -qi 'charging' && bstatus="Charging"
+    printf '%s\t%s' "$pct" "$bstatus"
+}
+
+_battery_segment() {
+    local raw pct bstatus color icon
+    raw="$(_battery_read_linux)" || raw="$(_battery_read_macos)" || return
+    [ -z "$raw" ] && return
+    pct="${raw%%$'\t'*}"
+    bstatus="${raw#*$'\t'}"
+    [[ "$pct" =~ ^[0-9]+$ ]] || return
+    if [ "$pct" -le 20 ]; then
+        color=196
+    elif [ "$pct" -le 50 ]; then
+        color=179
+    else
+        color=108
+    fi
+    icon="🔋"
+    [ "$bstatus" = "Charging" ] && icon="⚡"
+    echo " \[\033[38;5;${color}m\]${icon}${pct}%\[\033[0m\]"
+}
+
 ## Code de sortie de la commande précédente, affiché seulement en cas d'échec. $? doit être
 ## capturé par l'appelant en tout premier (avant toute substitution de commande) et passé en argument.
 _exitcode_segment() {
@@ -221,6 +298,8 @@ _plain_segment_render() {
         node)     _node_segment ;;
         duration) _duration_segment ;;
         exitcode) _exitcode_segment "$ec" ;;
+        docker)   _docker_segment ;;
+        battery)  _battery_segment ;;
     esac
 }
 
@@ -359,6 +438,33 @@ _agnoster_duration_segment() {
     _agnoster_segment 244 255 "took ${out}"
 }
 
+_agnoster_docker_segment() {
+    _docker_refresh_cache
+    if [ -z "$_docker_cache_ctx" ] || [ "$_docker_cache_ctx" = "default" ]; then
+        return
+    fi
+    _agnoster_segment 110 0 "🐳 ${_docker_cache_ctx}"
+}
+
+_agnoster_battery_segment() {
+    local raw pct bstatus bg icon
+    raw="$(_battery_read_linux)" || raw="$(_battery_read_macos)" || return
+    [ -z "$raw" ] && return
+    pct="${raw%%$'\t'*}"
+    bstatus="${raw#*$'\t'}"
+    [[ "$pct" =~ ^[0-9]+$ ]] || return
+    if [ "$pct" -le 20 ]; then
+        bg=196
+    elif [ "$pct" -le 50 ]; then
+        bg=179
+    else
+        bg=108
+    fi
+    icon="🔋"
+    [ "$bstatus" = "Charging" ] && icon="⚡"
+    _agnoster_segment "$bg" 255 "${icon}${pct}%"
+}
+
 ## Dispatcheur des segments "blocs" (thème agnoster). Nom de segment inconnu -> silence.
 _agnoster_segment_render() {
     local name="$1" ec="$2"
@@ -371,6 +477,8 @@ _agnoster_segment_render() {
         node)     _agnoster_node_segment ;;
         duration) _agnoster_duration_segment ;;
         exitcode) _agnoster_status_segment "$ec" ;;
+        docker)   _agnoster_docker_segment ;;
+        battery)  _agnoster_battery_segment ;;
     esac
 }
 

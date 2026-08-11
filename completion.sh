@@ -29,11 +29,11 @@ _chezmoi_complete() {
 
     if [ "${COMP_WORDS[1]}" = "config" ]; then
         if [ "$COMP_CWORD" -eq 2 ]; then
-            COMPREPLY=($(compgen -W "get set unset list help" -- "$cur"))
+            COMPREPLY=($(compgen -W "get set unset edit list help" -- "$cur"))
             return
         fi
         if [ "$COMP_CWORD" -eq 3 ] && { [ "$prev" = "get" ] || [ "$prev" = "set" ] || [ "$prev" = "unset" ]; }; then
-            COMPREPLY=($(compgen -W "prompt.theme ssh.modules" -- "$cur"))
+            COMPREPLY=($(compgen -W "prompt.theme prompt.segments ssh.modules modules.disabled" -- "$cur"))
             return
         fi
         ## Valeurs possibles pour "chezmoi config set prompt.theme <TAB>" (réutilise le registre de
@@ -51,8 +51,22 @@ _chezmoi_complete() {
         return
     fi
 
+    if [ "${COMP_WORDS[1]}" = "modules" ]; then
+        if [ "$COMP_CWORD" -eq 2 ]; then
+            COMPREPLY=($(compgen -W "list disable enable help" -- "$cur"))
+            return
+        fi
+        if [ "$COMP_CWORD" -eq 3 ] && { [ "$prev" = "disable" ] || [ "$prev" = "enable" ]; }; then
+            local mods
+            mods="${_CHEZMOI_MODULES_LIST:-config history z git-aliases gtag ports extract ssh docker net completion colors}"
+            COMPREPLY=($(compgen -W "$mods" -- "$cur"))
+            return
+        fi
+        return
+    fi
+
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "update reload version doctor config help" -- "$cur"))
+        COMPREPLY=($(compgen -W "update reload version doctor config modules bench help" -- "$cur"))
         return
     fi
 }
@@ -71,7 +85,19 @@ _completion_hookup_task() {
         eval "$(task --completion bash 2>/dev/null)" 2>/dev/null
     fi
 }
-_completion_hookup_task
+
+## --- Complétion docker (si présent sur la machine, aucune install forcée) ---
+## `docker completion <shell>` (Docker CLI >= 20.10) génère le script de complétion officiel,
+## même principe que go-task ci-dessus.
+_completion_hookup_docker() {
+    emulate -L bash 2>/dev/null
+    command -v docker >/dev/null 2>&1 || return 0
+    if [ -n "$ZSH_VERSION" ]; then
+        eval "$(docker completion zsh 2>/dev/null)" 2>/dev/null
+    else
+        eval "$(docker completion bash 2>/dev/null)" 2>/dev/null
+    fi
+}
 
 ## --- Hookup complétion git native sur les alias de git-aliases.sh (si déjà présente sur la
 ## machine, aucune install forcée) : chaque alias récupère la complétion de la sous-commande git
@@ -123,4 +149,56 @@ _completion_hookup_git_aliases() {
     __git_complete gm   _git_merge
     __git_complete grb  _git_rebase
 }
-_completion_hookup_git_aliases
+
+## --- Chargement paresseux des trois hookups ci-dessus ---
+## _completion_hookup_task/_completion_hookup_docker (fork+exec du binaire) et
+## _completion_hookup_git_aliases (potentiel "source" de git-completion.bash, plusieurs centaines
+## de lignes) coûtent chacun quelques ms à quelques dizaines de ms selon la machine -- payés à
+## chaque démarrage de shell alors qu'ils ne servent qu'au premier <TAB> réel sur la commande
+## concernée (souvent jamais dans une session courte). Un stub léger est enregistré à la place :
+## au premier <TAB>, il charge le vrai hookup (qui s'auto-enregistre via `complete -F <fn> <cmd>`,
+## écrasant le stub) puis redispatche vers la vraie fonction pour que ce premier <TAB> affiche déjà
+## les bonnes propositions (pas besoin d'appuyer deux fois). Si le hookup réel ne s'enregistre pas
+## (ex: git-completion.bash introuvable sur la machine), `complete -p` renvoie encore le stub
+## lui-même : détecté et ignoré pour éviter une récursion infinie.
+## Désactivable via CHEZMOI_NO_LAZY_COMPLETION=1 (comportement eager d'avant : tout chargé au
+## démarrage, utile pour un shell non-interactif/déboguage où il n'y aura jamais de <TAB>).
+_completion_lazy_dispatch() {
+    emulate -L bash 2>/dev/null
+    local cmd="$1" loader="$2"
+    "$loader"
+    ## "complete -p <cmd>" sous zsh/bashcompinit ignore parfois le filtre par commande et renvoie
+    ## TOUTES les registrations (constaté avec bashcompinit) : on filtre nous-mêmes sur la ligne
+    ## dont le dernier mot est bien <cmd>, plutôt que de faire confiance au filtrage de "complete -p".
+    local real_fn
+    real_fn=$(complete -p "$cmd" 2>/dev/null | awk -v c="$cmd" '$NF==c { for (i=1;i<NF;i++) if ($i=="-F") print $(i+1) }' | tail -n1)
+    case "$real_fn" in
+        ""|_completion_lazy_task|_completion_lazy_docker|_completion_lazy_git_alias) return 0 ;;
+    esac
+    declare -f "$real_fn" >/dev/null 2>&1 || return 0
+    "$real_fn" "${COMP_WORDS[0]}" "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD-1]}"
+}
+_completion_lazy_task()       { _completion_lazy_dispatch task   _completion_hookup_task; }
+_completion_lazy_docker()     { _completion_lazy_dispatch docker _completion_hookup_docker; }
+_completion_lazy_git_alias()  { _completion_lazy_dispatch "${COMP_WORDS[0]}" _completion_hookup_git_aliases; }
+
+_completion_install_hookups() {
+    emulate -L bash 2>/dev/null
+    if [ -n "$CHEZMOI_NO_LAZY_COMPLETION" ]; then
+        _completion_hookup_task
+        _completion_hookup_docker
+        _completion_hookup_git_aliases
+        return
+    fi
+    command -v task >/dev/null 2>&1 && complete -F _completion_lazy_task task
+    command -v docker >/dev/null 2>&1 && complete -F _completion_lazy_docker docker
+    local aliases a
+    aliases=""
+    if [ -n "$CHEZMOI_DIR" ] && [ -f "$CHEZMOI_DIR/git-aliases.sh" ]; then
+        aliases=$(grep -oE '^alias [a-zA-Z]+=' "$CHEZMOI_DIR/git-aliases.sh" | sed -E 's/^alias ([a-zA-Z]+)=/\1/')
+    fi
+    for a in $aliases; do
+        complete -F _completion_lazy_git_alias "$a" 2>/dev/null
+    done
+}
+_completion_install_hookups

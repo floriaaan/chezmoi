@@ -15,7 +15,7 @@ jobs:
           # -S error : la dette de warnings pré-existante (gtag.sh notamment) reste visible
           # mais ne bloque pas ce changeset ; les erreurs réelles font toujours échouer le job.
           shellcheck -S error -s bash chezmoi.sh git-aliases.sh gtag.sh z.sh completion.sh colors.sh \
-            history.sh ports.sh extract.sh ssh.sh test/*.sh
+            history.sh ports.sh extract.sh ssh.sh docker.sh net.sh test/*.sh
 
   test:
     runs-on: ubuntu-latest

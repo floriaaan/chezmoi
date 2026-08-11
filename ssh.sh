@@ -134,7 +134,7 @@ _ssh_prompt_theme_is_known() {
 _ssh_prompt_segments_sanitize() {
     emulate -L bash 2>/dev/null
     local val="$1" known seg out=""
-    known="${_CHEZMOI_PROMPT_SEGMENT_NAMES:-time user dir git pkg node duration exitcode}"
+    known="${_CHEZMOI_PROMPT_SEGMENT_NAMES:-time user dir git pkg node duration exitcode docker battery}"
     for seg in $val; do
         case " $known " in
             *" $seg "*) out="${out:+$out }${seg}" ;;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.0
+- feat: `docker.sh` — nouveau module, alias docker/docker-compose (`dps`, `dpsa`, `dimg`, `dex`, `dlog`, `dstop`, `drm`, `drmi`, `dprune`, `dcu`, `dcd`, `dcb`, `dcl`, `dcps`), inertes si `docker` absent (même logique que `git-aliases.sh` vis-à-vis de `git`)
+- feat: `net.sh` — nouveau module : `myip` (IP publique, plusieurs fournisseurs en repli : icanhazip/ifconfig.me/ipify), `localip` (IP locale de sortie, `ip route`/`ifconfig`/`ipconfig`), `weather [ville]` (une ligne via wttr.in) ; timeout court partout, jamais bloquant
+- feat: `prompt.sh`/`prompt.zsh` — deux nouveaux segments : `docker` (contexte docker actif via `docker context show`, mis en cache comme le segment git, masqué si absent/`"default"`) et `battery` (charge batterie, Linux `/sys/class/power_supply`/macOS `pmset -g batt`, masqué si pas de batterie, icône éclair en charge)
+- feat: `completion.sh` — complétion docker : `eval "$(docker completion bash|zsh)"` si le binaire `docker` est présent (même principe que go-task)
+- feat: `completion.sh` — les hookups task/docker/alias-git (fork+exec du binaire, ou source de `git-completion.bash`) sont désormais **chargés paresseusement** : un stub léger est enregistré au démarrage, le vrai chargement n'a lieu qu'au premier `<TAB>` réel sur la commande concernée (qui redispatche aussitôt vers la vraie complétion, pas besoin d'appuyer deux fois) ; `CHEZMOI_NO_LAZY_COMPLETION=1` revient au chargement eager d'avant
+- feat: `config.sh` — `chezmoi config edit` : ouvre le fichier de config brut dans `$EDITOR` (repli `vi`), recharge toutes les clés au retour
+- feat: `chezmoi.sh` — `chezmoi modules [list|disable <module>|enable <module>]` : active/désactive un module du barrel sans éditer `chezmoi.sh` (façon apt/brew), persisté via la nouvelle clé de config `modules.disabled` ; `config` n'est jamais désactivable (il porte cette clé lui-même)
+- feat: `chezmoi.sh` — `chezmoi bench` : mesure le temps de chargement (source) de chaque module du barrel, dans l'ordre réel de chargement, dans un sous-shell dédié (ne pollue jamais la session courante)
+- feat: `chezmoi.sh` — barrel étendu avec `docker`/`net` (entre `ssh` et `completion`)
+
 ## 1.8.0
 - feat: `completion.sh` — complétion go-task : `eval "$(task --completion bash|zsh)"` si le binaire `task` est présent sur la machine (aucune install forcée), pour bénéficier de la complétion officielle de Taskfile
 - feat: `completion.sh` — hookup `__git_complete` étendu à tous les alias de `git-aliases.sh` (`ga`, `gaa`, `gc`, `gca`, `gp`, `gpf`, `gl`, `gco`, `gcb`, `gb`, `gd`, `gds`, `glog`, `gs`, `gsp`, `grh`, `gcp`, `gm`, `grb`), auparavant limité à `gco`/`gcb`/`gb`/`gm`/`grb` : chaque alias récupère la complétion de la sous-commande git qu'il enveloppe (ex: `gco sta<TAB>` → `gco staging`, comme `git checkout sta<TAB>`)
