@@ -8,6 +8,8 @@
 ##   prompt.segments   liste ordonnée (espacée) des segments affichés par le prompt, quel que soit
 ##                     le thème actif ; vide -> liste par défaut du thème (cf. prompt.sh)
 ##   ssh.modules       modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
+##   modules.disabled  liste espacée des modules du barrel désactivés (cf. "chezmoi modules" dans
+##                     chezmoi.sh, qui pilote cette clé) ; vide par défaut (tous les modules actifs)
 ##
 ## "chezmoi config set <clé>" sans valeur, pour une clé à choix fermé (ex: prompt.theme), liste les
 ## valeurs possibles au lieu d'échouer (cf. _chezmoi_config_choices). prompt.segments est une clé à
@@ -18,10 +20,10 @@
 CHEZMOI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi"
 CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
 
-_CHEZMOI_CONFIG_KEYS="prompt.theme prompt.segments ssh.modules"
+_CHEZMOI_CONFIG_KEYS="prompt.theme prompt.segments ssh.modules modules.disabled"
 
 ## Catalogue des segments valides pour prompt.segments (cf. prompt.sh pour le détail de chacun).
-_CHEZMOI_PROMPT_SEGMENT_NAMES="time user dir git pkg node duration exitcode"
+_CHEZMOI_PROMPT_SEGMENT_NAMES="time user dir git pkg node duration exitcode docker battery"
 
 _CONFIG_OK='\033[38;5;108m'
 _CONFIG_WARN='\033[38;5;179m'
@@ -42,6 +44,7 @@ _chezmoi_config_default() {
         prompt.theme)    printf '%s' "default" ;;
         prompt.segments) printf '%s' "" ;;
         ssh.modules)     printf '%s' "prompt git-aliases gtag" ;;
+        modules.disabled) printf '%s' "" ;;
     esac
 }
 
@@ -94,6 +97,7 @@ _chezmoi_config_apply() {
         prompt.theme)    CHEZMOI_PROMPT_THEME="$val" ;;
         prompt.segments) CHEZMOI_PROMPT_SEGMENTS="$val" ;;
         ssh.modules)     _SSH_CHEZMOI_MODULES="$val" ;;
+        modules.disabled) CHEZMOI_MODULES_DISABLED="$val" ;;
     esac
 }
 
@@ -175,6 +179,25 @@ _chezmoi_config_unset() {
     printf "%b\n" "${_CONFIG_OK}chezmoi config: ${key} réinitialisée (défaut: ${default})${_CONFIG_RESET}"
 }
 
+## Ouvre le fichier de config brut ($EDITOR, repli sur vi) et recharge toutes les clés au retour
+## (comme "chezmoi config set", mais pour une édition libre à la main -- utile pour poser
+## plusieurs clés d'un coup sans un "set" par clé).
+_chezmoi_config_edit() {
+    mkdir -p "$CHEZMOI_CONFIG_DIR"
+    [ -f "$CHEZMOI_CONFIG_FILE" ] || : > "$CHEZMOI_CONFIG_FILE"
+    local editor="${EDITOR:-vi}"
+    if ! command -v "$editor" >/dev/null 2>&1; then
+        editor=vi
+        if ! command -v "$editor" >/dev/null 2>&1; then
+            printf "%b\n" "${_CONFIG_ERR}chezmoi config: aucun éditeur disponible (\$EDITOR non défini/introuvable et 'vi' absent)${_CONFIG_RESET}" >&2
+            return 1
+        fi
+    fi
+    "$editor" "$CHEZMOI_CONFIG_FILE"
+    _chezmoi_config_load_all
+    printf "%b\n" "${_CONFIG_OK}chezmoi config: rechargé après édition${_CONFIG_RESET}"
+}
+
 _chezmoi_config_cmd() {
     case "$1" in
         ""|list)
@@ -202,6 +225,9 @@ _chezmoi_config_cmd() {
             fi
             _chezmoi_config_unset "$2"
             ;;
+        edit)
+            _chezmoi_config_edit
+            ;;
         help|-h|--help)
             cat <<EOF
 chezmoi config - préférences persistantes (thème du prompt, modules embarqués en ssh)
@@ -214,6 +240,7 @@ Usage:
                                      avec un aperçu pour prompt.theme ; pour prompt.segments,
                                      liste le catalogue de segments valides
   chezmoi config unset <clé>        réinitialise une clé à sa valeur par défaut
+  chezmoi config edit                ouvre le fichier de config dans \$EDITOR (repli vi), recharge au retour
 
 Clés connues:
   prompt.theme     thème du prompt : "default" (PS1 par défaut de bash reproduit à l'identique,
@@ -223,6 +250,7 @@ Clés connues:
   prompt.segments  liste ordonnée (espacée) des segments affichés, ex: "time dir git node".
                    Vide -> liste par défaut du thème actif. Catalogue: ${_CHEZMOI_PROMPT_SEGMENT_NAMES}
   ssh.modules      modules chezmoi embarqués par le wrapper ssh (défaut: "prompt git-aliases gtag")
+  modules.disabled modules du barrel désactivés (piloté par "chezmoi modules", cf. chezmoi.sh)
 EOF
             ;;
         *)

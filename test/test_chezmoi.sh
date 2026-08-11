@@ -76,3 +76,219 @@ test_chezmoi_reload_listed_in_help() {
     out=$(chezmoi help)
     assert_match "reload" "$out" "chezmoi help mentionne reload"
 }
+
+## --- chezmoi modules ---
+
+test_chezmoi_modules_list_shows_all_enabled_by_default() {
+    (
+        CHEZMOI_MODULES_DISABLED=""
+        local out
+        out=$(_chezmoi_modules_list)
+        assert_match "docker" "$out" "chezmoi modules liste le module docker"
+        assert_match "net" "$out" "chezmoi modules liste le module net"
+        assert_not_match "désactivé" "$out" "aucun module désactivé par défaut"
+    )
+}
+
+test_chezmoi_modules_disable_persists_and_shows_in_list() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        CHEZMOI_MODULES_DISABLED=""
+        _chezmoi_modules_cmd disable docker >/dev/null
+        assert_match "docker" "$CHEZMOI_MODULES_DISABLED" "chezmoi modules disable docker: répercuté sur CHEZMOI_MODULES_DISABLED"
+        local out
+        out=$(_chezmoi_modules_list)
+        assert_match "docker \(désactivé\)" "$out" "chezmoi modules: docker marqué désactivé dans la liste"
+    )
+}
+
+test_chezmoi_modules_enable_removes_from_disabled() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        CHEZMOI_MODULES_DISABLED=""
+        _chezmoi_modules_cmd disable docker >/dev/null
+        _chezmoi_modules_cmd enable docker >/dev/null
+        assert_not_match "docker" "$CHEZMOI_MODULES_DISABLED" "chezmoi modules enable docker: retiré de CHEZMOI_MODULES_DISABLED"
+    )
+}
+
+test_chezmoi_modules_disable_refuses_config() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        assert_failure "chezmoi modules disable config est refusé" -- _chezmoi_modules_cmd disable config
+    )
+}
+
+test_chezmoi_modules_disable_refuses_unknown_module() {
+    assert_failure "chezmoi modules disable <module inconnu> échoue" -- _chezmoi_modules_cmd disable bogus
+}
+
+test_chezmoi_modules_disable_without_name_fails() {
+    assert_failure "chezmoi modules disable sans nom échoue" -- _chezmoi_modules_cmd disable
+}
+
+test_chezmoi_modules_unknown_subcommand_fails() {
+    assert_failure "chezmoi modules <sous-commande inconnue> échoue" -- _chezmoi_modules_cmd bogus
+}
+
+test_chezmoi_modules_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "modules" "$out" "chezmoi help mentionne modules"
+}
+
+test_chezmoi_barrel_skips_disabled_module() {
+    (
+        ## Le module désactivé doit venir du fichier de config réel : CHEZMOI_MODULES_DISABLED
+        ## posé ici serait de toute façon écrasé par _chezmoi_config_load_all (fin de config.sh,
+        ## sourcé avant que la boucle du barrel n'atteigne "docker") lors du re-source ci-dessous.
+        ## docker.sh est déjà sourcé au niveau global par test_docker.sh (comme tous les
+        ## test_*.sh, chargés une fois par run.sh) : "dps" existe donc déjà comme alias hérité
+        ## du process parent avant même ce sous-shell. On le retire explicitement ici (effet
+        ## local au sous-shell, sans impact sur le reste de la suite) pour repartir d'un état
+        ## propre et vérifier que le re-source du barrel ne le redéfinit pas.
+        unalias dps 2>/dev/null
+        local xdg
+        xdg=$(mktemp -d)
+        mkdir -p "$xdg/chezmoi"
+        printf 'modules.disabled=docker\n' > "$xdg/chezmoi/config"
+        export XDG_CONFIG_HOME="$xdg"
+        source "$_test_repo_dir/chezmoi.sh"
+        assert_failure "module docker désactivé -> son alias dps n'est pas défini" -- alias dps
+    )
+}
+
+## --- chezmoi themes (raccourci pour prompt.theme) ---
+
+test_chezmoi_themes_list_shows_all_choices() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(chezmoi themes)
+        assert_match "default" "$out" "chezmoi themes liste 'default'"
+        assert_match "minimal" "$out" "chezmoi themes liste 'minimal'"
+        assert_match "agnoster" "$out" "chezmoi themes liste 'agnoster'"
+        assert_match "floriaaan" "$out" "chezmoi themes liste 'floriaaan'"
+    )
+}
+
+test_chezmoi_themes_set_persists_and_applies() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes minimal >/dev/null
+        assert_eq "minimal" "$(_chezmoi_config_get prompt.theme)" "chezmoi themes minimal: persisté dans le fichier de config"
+        assert_eq "minimal" "$CHEZMOI_PROMPT_THEME" "chezmoi themes minimal: appliqué tout de suite (CHEZMOI_PROMPT_THEME)"
+    )
+}
+
+test_chezmoi_themes_matches_config_set_equivalent() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes agnoster >/dev/null
+        local via_themes
+        via_themes="$(_chezmoi_config_get prompt.theme)"
+        chezmoi config set prompt.theme minimal >/dev/null
+        local via_config
+        via_config="$(_chezmoi_config_get prompt.theme)"
+        assert_eq "agnoster" "$via_themes" "chezmoi themes <thème> écrit bien prompt.theme"
+        assert_eq "minimal" "$via_config" "chezmoi config set prompt.theme reste un équivalent fonctionnel"
+    )
+}
+
+test_chezmoi_themes_unset_resets_to_default() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi themes minimal >/dev/null
+        chezmoi themes unset >/dev/null
+        assert_eq "default" "$(_chezmoi_config_get prompt.theme)" "chezmoi themes unset revient au défaut"
+    )
+}
+
+test_chezmoi_themes_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "themes" "$out" "chezmoi help mentionne themes"
+}
+
+## --- chezmoi prompt (raccourci pour prompt.segments) ---
+
+test_chezmoi_prompt_list_shows_segment_catalog() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local out
+        out=$(chezmoi prompt)
+        assert_match "time" "$out" "chezmoi prompt liste le segment 'time'"
+        assert_match "battery" "$out" "chezmoi prompt liste le segment 'battery'"
+        assert_match "docker" "$out" "chezmoi prompt liste le segment 'docker'"
+    )
+}
+
+test_chezmoi_prompt_set_joins_bare_args_with_space() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi prompt time dir git >/dev/null
+        assert_eq "time dir git" "$(_chezmoi_config_get prompt.segments)" \
+            "chezmoi prompt time dir git (sans guillemets) persiste 'time dir git'"
+        assert_eq "time dir git" "$CHEZMOI_PROMPT_SEGMENTS" "chezmoi prompt ... appliqué tout de suite"
+    )
+}
+
+test_chezmoi_prompt_unset_resets_to_theme_default() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        chezmoi prompt dir >/dev/null
+        chezmoi prompt unset >/dev/null
+        assert_eq "" "$(_chezmoi_config_get prompt.segments)" "chezmoi prompt unset revient au défaut (vide, liste du thème)"
+    )
+}
+
+test_chezmoi_prompt_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "prompt" "$out" "chezmoi help mentionne prompt"
+}
+
+## --- chezmoi bench ---
+
+test_chezmoi_bench_runs_and_reports_total() {
+    (
+        local out
+        out=$(chezmoi bench)
+        assert_match "chezmoi bench" "$out" "chezmoi bench affiche son titre"
+        assert_match "total:" "$out" "chezmoi bench affiche un total"
+        assert_match "config" "$out" "chezmoi bench liste le module config"
+    )
+}
+
+test_chezmoi_bench_skips_disabled_module() {
+    (
+        ## "chezmoi bench" (re)source aussi config.sh dans son sous-shell dédié : la valeur de
+        ## CHEZMOI_MODULES_DISABLED doit donc venir du fichier de config réel, sans quoi
+        ## _chezmoi_config_load_all l'écraserait avec la valeur par défaut (vide) avant que la
+        ## boucle de bench n'atteigne "docker" (même piège que pour le barrel, cf. test ci-dessus).
+        local xdg
+        xdg=$(mktemp -d)
+        mkdir -p "$xdg/chezmoi"
+        printf 'modules.disabled=docker\n' > "$xdg/chezmoi/config"
+        export XDG_CONFIG_HOME="$xdg"
+        local out
+        out=$(chezmoi bench)
+        assert_match "docker.*désactivé" "$out" "chezmoi bench signale docker comme désactivé, sauté"
+    )
+}
+
+test_chezmoi_bench_listed_in_help() {
+    local out
+    out=$(chezmoi help)
+    assert_match "bench" "$out" "chezmoi help mentionne bench"
+}

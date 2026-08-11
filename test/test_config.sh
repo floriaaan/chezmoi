@@ -238,6 +238,60 @@ test_config_set_prompt_segments_no_value_lists_catalog_instead_of_failing() {
     )
 }
 
+test_config_default_modules_disabled_is_empty() {
+    (
+        CHEZMOI_CONFIG_FILE=$(mktemp -u)
+        local out
+        out=$(_chezmoi_config_get modules.disabled)
+        assert_eq "" "$out" "modules.disabled sans fichier de config = défaut vide (tous les modules actifs)"
+    )
+}
+
+test_config_edit_reloads_after_editing() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local fake_editor
+        fake_editor=$(mktemp)
+        cat > "$fake_editor" <<'EOF'
+#!/usr/bin/env bash
+printf 'prompt.theme=minimal\n' > "$1"
+EOF
+        chmod +x "$fake_editor"
+        EDITOR="$fake_editor" _chezmoi_config_edit >/dev/null
+        local out
+        out=$(_chezmoi_config_get prompt.theme)
+        assert_eq "minimal" "$out" "chezmoi config edit: la valeur écrite à la main est prise en compte après édition"
+    )
+}
+
+test_config_edit_creates_config_dir_and_file_if_missing() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)/nested
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        local fake_editor
+        fake_editor=$(mktemp)
+        cat > "$fake_editor" <<'EOF'
+#!/usr/bin/env bash
+: > "$1"
+EOF
+        chmod +x "$fake_editor"
+        EDITOR="$fake_editor" _chezmoi_config_edit >/dev/null
+        assert_success "chezmoi config edit crée le dossier/fichier de config s'il n'existe pas" \
+            -- test -f "$CHEZMOI_CONFIG_FILE"
+    )
+}
+
+test_config_edit_fails_without_any_editor() {
+    (
+        CHEZMOI_CONFIG_DIR=$(mktemp -d)
+        CHEZMOI_CONFIG_FILE="$CHEZMOI_CONFIG_DIR/config"
+        EDITOR="/does/not/exist/editor"
+        command() { [ "$2" = "vi" ] && return 1; [ "$2" = "/does/not/exist/editor" ] && return 1; builtin command "$@"; }
+        assert_failure "chezmoi config edit échoue si aucun éditeur n'est disponible" -- _chezmoi_config_edit
+    )
+}
+
 test_config_list_shows_prompt_segments_key() {
     (
         CHEZMOI_CONFIG_DIR=$(mktemp -d)
