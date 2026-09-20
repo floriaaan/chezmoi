@@ -504,6 +504,23 @@ _build_ps1_default() {
 }
 ## chezmoi:theme-end default
 
+## --- Notice de version dans le premier prompt ---
+## chezmoi.sh pose _CHEZMOI_PROMPT_NOTICE au chargement plutôt que d'imprimer une bannière ; on la
+## colle en bout de ligne d'infos (prompt multi-ligne) ou sur sa propre ligne juste au-dessus
+## (thèmes mono-ligne : default, minimal), puis on la vide -- un seul prompt la porte.
+## Les thèmes multi-ligne de ce fichier écrivent le saut de ligne en échappement bash ("\n", deux
+## caractères interprétés par bash au rendu du prompt), pas en newline littéral -- les deux formes
+## sont gérées, la notice allant toujours en fin de l'avant-dernière ligne (la ligne d'infos).
+_chezmoi_prompt_inject_notice() {
+    [ -n "$_CHEZMOI_PROMPT_NOTICE" ] || return 0
+    case "$PS1" in
+        *'\n'*)  PS1="${PS1%'\n'*} ${_CHEZMOI_PROMPT_NOTICE}\n${PS1##*'\n'}" ;;
+        *$'\n'*) PS1="${PS1%$'\n'*} ${_CHEZMOI_PROMPT_NOTICE}"$'\n'"${PS1##*$'\n'}" ;;
+        *)        PS1="${_CHEZMOI_PROMPT_NOTICE}\n$PS1" ;;
+    esac
+    _CHEZMOI_PROMPT_NOTICE=""
+}
+
 _build_ps1() {
     case "$CHEZMOI_PROMPT_THEME" in
         minimal)   _build_ps1_minimal ;;
@@ -511,6 +528,7 @@ _build_ps1() {
         floriaaan) _build_ps1_floriaaan ;;
         *)         _build_ps1_default ;;
     esac
+    _chezmoi_prompt_inject_notice
 }
 
 ## Idempotent : évite doublons/`;;` si chezmoi.sh est re-sourcé (ex: `chezmoi update`).

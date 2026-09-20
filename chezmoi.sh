@@ -466,10 +466,19 @@ _chezmoi_check_update() {
 [ -z "$CHEZMOI_NO_UPDATE_CHECK" ] && [ -z "$CHEZMOI_REMOTE" ] && _chezmoi_check_update
 
 ## --- Bannière de chargement ---
+## Rien n'est imprimé pendant le chargement : la version est injectée dans le PREMIER prompt de la
+## session, en bout de ligne d'infos (cf. _chezmoi_prompt_inject_notice dans prompt.sh/prompt.zsh,
+## qui consomme puis vide _CHEZMOI_PROMPT_NOTICE -- les prompts suivants sont inchangés). Aucune
+## ligne volée au scrollback, et plus rien dans les shells non interactifs (scripts, `ssh <cmd>`),
+## où la bannière polluait la sortie. CHEZMOI_NO_BANNER=1 supprime la notice.
+## Échappements dépendants du shell : \[...\] (largeur nulle) sous bash, %F{}/%f sous zsh.
+_CHEZMOI_PROMPT_NOTICE=""
 if [ -z "$CHEZMOI_NO_BANNER" ]; then
-    if [ -n "$CHEZMOI_REMOTE" ]; then
-        printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET} chargé, remote"
+    if [ -n "$ZSH_VERSION" ]; then
+        _CHEZMOI_PROMPT_NOTICE="%F{108}chezmoi%f %F{110}v${CHEZMOI_VERSION}%f"
+        [ -n "$CHEZMOI_REMOTE" ] && _CHEZMOI_PROMPT_NOTICE="${_CHEZMOI_PROMPT_NOTICE} %F{179}remote%f"
     else
-        printf "%b\n" "${_CHEZMOI_OK}chezmoi${_CHEZMOI_RESET} ${_CHEZMOI_INFO}v${CHEZMOI_VERSION}${_CHEZMOI_RESET} chargé"
+        _CHEZMOI_PROMPT_NOTICE="\[\033[38;5;108m\]chezmoi\[\033[0m\] \[\033[38;5;110m\]v${CHEZMOI_VERSION}\[\033[0m\]"
+        [ -n "$CHEZMOI_REMOTE" ] && _CHEZMOI_PROMPT_NOTICE="${_CHEZMOI_PROMPT_NOTICE} \[\033[38;5;179m\]remote\[\033[0m\]"
     fi
 fi

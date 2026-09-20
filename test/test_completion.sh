@@ -186,16 +186,67 @@ EOF
     )
 }
 
-test_lazy_git_alias_stub_registered_when_chezmoi_dir_known() {
+## "complete -p <cmd>" sous zsh/bashcompinit renvoie TOUTES les registrations (cf. completion.sh) :
+## on filtre nous-mêmes sur la ligne dont le dernier mot est bien <cmd>.
+_test_complete_fn() {
+    complete -p "$1" 2>/dev/null | awk -v c="$1" '$NF==c { for (i=1;i<NF;i++) if ($i=="-F") print $(i+1) }' | tail -n1
+}
+
+## Stubs paresseux bash uniquement : sous zsh, les alias git passent par compdef (cf. plus bas).
+if [ -z "$ZSH_VERSION" ]; then
+
+test_lazy_git_alias_stub_registered_when_git_completion_available() {
     (
         unset CHEZMOI_NO_LAZY_COMPLETION
         CHEZMOI_DIR="$_test_repo_dir"
         source "$_test_repo_dir/completion.sh"
+        local fake_dir
+        fake_dir=$(mktemp -d)
+        echo '__git_complete() { :; }' > "$fake_dir/git-completion.bash"
+        _COMPLETION_GIT_COMPLETION_PATHS=("$fake_dir/git-completion.bash")
+        _completion_install_hookups
         local out
-        out=$(complete -p gco 2>/dev/null)
-        assert_match "_completion_lazy_git_alias" "$out" "gco: stub paresseux enregistré (CHEZMOI_DIR connu)"
+        out=$(_test_complete_fn gco)
+        assert_match "_completion_lazy_git_alias" "$out" "gco: stub paresseux enregistré quand git-completion.bash est trouvable"
     )
 }
+
+## Sans git-completion.bash sur la machine (cas par défaut sous macOS), le hookup ne pourra jamais
+## aboutir : enregistrer un stub y volerait la complétion par défaut des alias pour rien.
+test_lazy_git_alias_no_stub_without_git_completion_bash() {
+    (
+        unset CHEZMOI_NO_LAZY_COMPLETION
+        unset -f __git_complete 2>/dev/null
+        CHEZMOI_DIR="$_test_repo_dir"
+        source "$_test_repo_dir/completion.sh"
+        complete -r gco 2>/dev/null
+        _COMPLETION_GIT_COMPLETION_PATHS=()
+        _completion_install_hookups
+        local out
+        out=$(_test_complete_fn gco)
+        assert_eq "" "$out" "aucun git-completion.bash trouvable -> pas de stub sur gco (complétion par défaut préservée)"
+    )
+}
+
+## Si malgré tout le hookup réel ne s'enregistre pas au 1er <TAB>, le stub doit se retirer lui-même.
+test_lazy_stub_removes_itself_when_real_hookup_never_registers() {
+    (
+        unset CHEZMOI_NO_LAZY_COMPLETION
+        source "$_test_repo_dir/completion.sh"
+        complete -F _completion_lazy_git_alias gco
+        unset -f __git_complete 2>/dev/null
+        _COMPLETION_GIT_COMPLETION_PATHS=()
+        COMP_WORDS=(gco "")
+        COMP_CWORD=1
+        COMPREPLY=()
+        _completion_lazy_git_alias
+        local out
+        out=$(_test_complete_fn gco)
+        assert_eq "" "$out" "hookup impossible -> le stub se désenregistre au lieu de bloquer les <TAB> suivants"
+    )
+}
+
+fi
 
 test_lazy_git_alias_first_tab_loads_and_redispatches() {
     (
@@ -296,3 +347,128 @@ test_git_alias_gs_maps_to_git_stash_completion() {
         assert_eq "_git_stash" "$got" "gs -> complétion de 'git stash'"
     )
 }
+
+## --- table alias -> sous-commande git dérivée de git-aliases.sh ---
+
+test_git_alias_pairs_derived_from_git_aliases_file() {
+    (
+        CHEZMOI_DIR="$_test_repo_dir"
+        source "$_test_repo_dir/completion.sh"
+        local pairs
+        pairs=$(_completion_git_alias_pairs)
+        assert_match "gco checkout" "$pairs" "gco est dérivé sur la sous-commande checkout"
+        assert_match "gcp cherry-pick" "$pairs" "gcp est dérivé sur la sous-commande cherry-pick"
+        assert_match "glog log" "$pairs" "glog est dérivé sur la sous-commande log"
+    )
+}
+
+test_git_alias_cherry_pick_maps_to_underscored_completion_function() {
+    (
+        local got=""
+        __git_complete() { [ "$1" = "gcp" ] && got="$2"; }
+        _completion_hookup_git_aliases
+        assert_eq "_git_cherry_pick" "$got" "gcp -> _git_cherry_pick (tiret converti en underscore)"
+    )
+}
+
+## --- complétion des valeurs de "chezmoi config set <clé>" ---
+
+test_config_set_prompt_segments_completion_lists_segments() {
+    COMP_WORDS=(chezmoi config set prompt.segments "")
+    COMP_CWORD=4
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "battery" "${COMPREPLY[*]}" "chezmoi config set prompt.segments <TAB> propose battery"
+}
+
+test_config_set_modules_disabled_completion_lists_modules() {
+    COMP_WORDS=(chezmoi config set modules.disabled "")
+    COMP_CWORD=4
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "docker" "${COMPREPLY[*]}" "chezmoi config set modules.disabled <TAB> propose docker"
+}
+
+test_config_set_theme_completion_still_lists_themes() {
+    COMP_WORDS=(chezmoi config set prompt.theme "")
+    COMP_CWORD=4
+    COMPREPLY=()
+    _chezmoi_complete
+    assert_match "floriaaan" "${COMPREPLY[*]}" "chezmoi config set prompt.theme <TAB> propose floriaaan"
+}
+
+## --- zsh : les alias git réutilisent la complétion native compsys (compdef), pas un stub bash ---
+
+if [ -n "$ZSH_VERSION" ]; then
+
+test_zsh_git_aliases_hooked_through_compdef() {
+    (
+        local calls=()
+        compdef() { calls+=("$2"); }
+        _completion_hookup_git_aliases_zsh
+        local joined="${calls[*]}"
+        assert_match "gco=git-checkout" "$joined" "zsh: gco est mappé sur la complétion native de git checkout"
+        assert_match "gcp=git-cherry-pick" "$joined" "zsh: gcp est mappé sur git cherry-pick"
+    )
+}
+
+fi
+
+## --- dépendance bash-completion (_init_completion) des scripts générés par task/docker ---
+
+test_bash_completion_satisfied_passes_script_without_init_completion() {
+    (
+        _COMPLETION_BASH_COMPLETION_PATHS=()
+        assert_success "script sans _init_completion -> aucune dépendance à satisfaire" \
+            -- _completion_bash_completion_satisfied 'complete -F _foo foo'
+    )
+}
+
+test_bash_completion_satisfied_fails_when_init_completion_unavailable() {
+    (
+        unset -f _init_completion 2>/dev/null
+        _COMPLETION_BASH_COMPLETION_PATHS=()
+        assert_failure "_init_completion introuvable -> hookup refusé (pas de complétion cassée enregistrée)" \
+            -- _completion_bash_completion_satisfied '_init_completion -n : || return'
+    )
+}
+
+test_bash_completion_sourced_from_known_path_when_needed() {
+    (
+        unset -f _init_completion 2>/dev/null
+        local fake_dir
+        fake_dir=$(mktemp -d)
+        echo '_init_completion() { :; }' > "$fake_dir/bash_completion"
+        _COMPLETION_BASH_COMPLETION_PATHS=("$fake_dir/bash_completion")
+        assert_success "bash-completion trouvé à un chemin connu -> sourcé à la demande" \
+            -- _completion_bash_completion_satisfied '_init_completion -n : || return'
+    )
+}
+
+## Chemin bash uniquement (sous zsh, task génère un script compsys sans _init_completion).
+if [ -z "$ZSH_VERSION" ]; then
+
+## Régression : `task <TAB>` affichait "bash: _init_completion : commande introuvable" à chaque TAB.
+test_task_hookup_registers_nothing_when_init_completion_unavailable() {
+    (
+        local fake_bin
+        fake_bin=$(mktemp -d)
+        cat > "$fake_bin/task" <<'TASKEOF'
+#!/usr/bin/env bash
+if [ "$1" = "--completion" ]; then
+    echo '_broken_task_complete() { _init_completion -n : || return; }'
+    echo 'complete -F _broken_task_complete task'
+fi
+TASKEOF
+        chmod +x "$fake_bin/task"
+        PATH="$fake_bin:$PATH"
+        unset -f _init_completion 2>/dev/null
+        complete -r task 2>/dev/null
+        _COMPLETION_BASH_COMPLETION_PATHS=()
+        _completion_hookup_task
+        assert_failure "task: script dépendant de _init_completion non évalué quand bash-completion manque" \
+            -- declare -f _broken_task_complete
+    )
+}
+
+fi

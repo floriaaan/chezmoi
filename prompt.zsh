@@ -511,6 +511,19 @@ _chezmoi_precmd_default() {
 }
 ## chezmoi:theme-end default
 
+## --- Notice de version dans le premier prompt ---
+## chezmoi.sh pose _CHEZMOI_PROMPT_NOTICE au chargement plutôt que d'imprimer une bannière ; on la
+## colle en bout de ligne d'infos (prompt multi-ligne) ou sur sa propre ligne juste au-dessus
+## (thèmes mono-ligne : default, minimal), puis on la vide -- un seul prompt la porte.
+_chezmoi_prompt_inject_notice() {
+    [ -n "$_CHEZMOI_PROMPT_NOTICE" ] || return 0
+    case "$PROMPT" in
+        *$'\n'*) PROMPT="${PROMPT%$'\n'*} ${_CHEZMOI_PROMPT_NOTICE}"$'\n'"${PROMPT##*$'\n'}" ;;
+        *)        PROMPT="${_CHEZMOI_PROMPT_NOTICE}"$'\n'"$PROMPT" ;;
+    esac
+    _CHEZMOI_PROMPT_NOTICE=""
+}
+
 _chezmoi_precmd() {
     case "$CHEZMOI_PROMPT_THEME" in
         minimal)   _chezmoi_precmd_minimal ;;
@@ -518,5 +531,6 @@ _chezmoi_precmd() {
         floriaaan) _chezmoi_precmd_floriaaan ;;
         *)         _chezmoi_precmd_default ;;
     esac
+    _chezmoi_prompt_inject_notice
 }
 add-zsh-hook precmd _chezmoi_precmd

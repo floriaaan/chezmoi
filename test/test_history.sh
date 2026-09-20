@@ -70,7 +70,7 @@ test_history_sync_not_added_twice() {
         PROMPT_COMMAND="_chezmoi_history_sync"
         source "$_test_repo_dir/history.sh"
         local count
-        count=$(grep -o "_chezmoi_history_sync" <<< "$PROMPT_COMMAND" | wc -l)
+        count=$(grep -c "_chezmoi_history_sync" <<< "${PROMPT_COMMAND//;/$'\n'}")
         assert_eq "1" "$count" "history.sh n'ajoute pas deux fois le même hook"
     )
 }

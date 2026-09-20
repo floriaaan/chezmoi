@@ -246,3 +246,74 @@ test_git_segment_minimal_shows_branch_no_ahead_behind() {
         assert_not_match "↑" "$out" "segment git minimal n'affiche pas ahead/behind"
     )
 }
+
+## --- Notice de version injectée dans le premier prompt (cf. chezmoi.sh, _CHEZMOI_PROMPT_NOTICE) ---
+
+if [ -n "$ZSH_VERSION" ]; then
+
+test_prompt_notice_appended_to_info_line_zsh() {
+    (
+        PROMPT=$'\n''infos'$'\n''%F{108}❯%f '
+        _CHEZMOI_PROMPT_NOTICE="chezmoi v9.9.9"
+        _chezmoi_prompt_inject_notice
+        assert_eq $'\n''infos chezmoi v9.9.9'$'\n''%F{108}❯%f ' "$PROMPT" \
+            "zsh: la notice est collée en fin de ligne d'infos, la ligne de saisie est intacte"
+    )
+}
+
+test_prompt_notice_consumed_after_first_prompt_zsh() {
+    (
+        PROMPT=$'\n''infos'$'\n''❯ '
+        _CHEZMOI_PROMPT_NOTICE="chezmoi v9.9.9"
+        _chezmoi_prompt_inject_notice
+        local first="$PROMPT"
+        PROMPT=$'\n''infos'$'\n''❯ '
+        _chezmoi_prompt_inject_notice
+        assert_eq $'\n''infos'$'\n''❯ ' "$PROMPT" "zsh: les prompts suivants ne portent plus la notice"
+    )
+}
+
+else
+
+## Les thèmes bash écrivent le saut de ligne en échappement "\n" (deux caractères), pas en newline
+## littéral : c'est cette forme qu'il faut savoir découper.
+test_prompt_notice_appended_to_info_line_bash() {
+    (
+        PS1='\n'"infos"'\n'"❯ "
+        _CHEZMOI_PROMPT_NOTICE="chezmoi v9.9.9"
+        _chezmoi_prompt_inject_notice
+        assert_eq '\n'"infos chezmoi v9.9.9"'\n'"❯ " "$PS1" \
+            "bash: la notice est collée en fin de ligne d'infos, la ligne de saisie est intacte"
+    )
+}
+
+test_prompt_notice_on_own_line_for_single_line_prompt_bash() {
+    (
+        PS1='\u@\h:\w\$ '
+        _CHEZMOI_PROMPT_NOTICE="chezmoi v9.9.9"
+        _chezmoi_prompt_inject_notice
+        assert_eq "chezmoi v9.9.9"'\n''\u@\h:\w\$ ' "$PS1" \
+            "bash: prompt mono-ligne (thème default) -> notice sur sa propre ligne au-dessus"
+    )
+}
+
+test_prompt_notice_consumed_after_first_prompt_bash() {
+    (
+        PS1='\n'"infos"'\n'"❯ "
+        _CHEZMOI_PROMPT_NOTICE="chezmoi v9.9.9"
+        _chezmoi_prompt_inject_notice
+        PS1='\n'"infos"'\n'"❯ "
+        _chezmoi_prompt_inject_notice
+        assert_eq '\n'"infos"'\n'"❯ " "$PS1" "bash: les prompts suivants ne portent plus la notice"
+    )
+}
+
+fi
+
+test_prompt_notice_noop_when_empty() {
+    (
+        _CHEZMOI_PROMPT_NOTICE=""
+        assert_success "notice vide (CHEZMOI_NO_BANNER=1) -> injection no-op" \
+            -- _chezmoi_prompt_inject_notice
+    )
+}
