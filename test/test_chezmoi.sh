@@ -292,3 +292,50 @@ test_chezmoi_bench_listed_in_help() {
     out=$(chezmoi help)
     assert_match "bench" "$out" "chezmoi help mentionne bench"
 }
+
+## --- Notice de mise à jour (auto-scan) ---
+
+test_version_newer_compares_numerically_per_field() {
+    assert_success "1.10.0 > 1.9.2 (numérique, pas lexicographique)" -- _chezmoi_version_newer 1.10.0 1.9.2
+    assert_success "1.9.2 > 1.9.1" -- _chezmoi_version_newer 1.9.2 1.9.1
+    assert_success "2.0 > 1.9.9 (longueurs différentes)" -- _chezmoi_version_newer 2.0 1.9.9
+    assert_failure "1.9.1 = 1.9.1 -> pas plus récent" -- _chezmoi_version_newer 1.9.1 1.9.1
+    assert_failure "1.9.0 < 1.9.1" -- _chezmoi_version_newer 1.9.0 1.9.1
+}
+
+## Source le barrel dans un HOME jetable (cache "dernier check" frais -> aucun curl lancé) avec le
+## fichier de version distante donné, et affiche la notice du premier prompt obtenue.
+_test_update_notice_for() {
+    (
+        local h
+        h=$(mktemp -d)
+        mkdir -p "$h/.cache"
+        date +%s > "$h/.cache/chezmoi_last_check"
+        [ -n "$1" ] && echo "$1" > "$h/.cache/chezmoi_remote_version"
+        HOME="$h" XDG_CONFIG_HOME="$h/.config" CHEZMOI_REMOTE_VERSION_FILE="" \
+        CHEZMOI_NO_UPDATE_CHECK="" CHEZMOI_NO_BANNER=1
+        unset CHEZMOI_NO_UPDATE_CHECK CHEZMOI_REMOTE_VERSION_FILE
+        export HOME XDG_CONFIG_HOME
+        source "$_test_repo_dir/chezmoi.sh"
+        printf '%s' "$_CHEZMOI_PROMPT_NOTICE"
+    )
+}
+
+test_update_notice_shown_when_remote_is_newer() {
+    local out
+    out=$(_test_update_notice_for 99.0.0)
+    assert_match "v99.0.0 dispo" "$out" "version distante plus récente -> notice dans le premier prompt"
+    assert_match "chezmoi update" "$out" "la notice indique la commande à lancer"
+}
+
+test_update_notice_hidden_when_up_to_date() {
+    local out
+    out=$(_test_update_notice_for "$CHEZMOI_VERSION")
+    assert_eq "" "$out" "version distante = locale -> pas de notice"
+}
+
+test_update_notice_hidden_without_cached_remote_version() {
+    local out
+    out=$(_test_update_notice_for "")
+    assert_eq "" "$out" "aucun fetch encore fait (fichier absent) -> pas de notice"
+}

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.0
+- feat: `chezmoi.sh` — auto-scan de mise à jour : le premier shell de la journée (throttle 24h) récupère en arrière-plan le `VERSION` de origin/main (timeout 2s, jamais bloquant) et le range dans `~/.cache/chezmoi_remote_version` (seulement si c'est un vrai numéro de version) ; quand elle est strictement plus récente que la locale, le premier prompt de chaque nouveau shell affiche `⬆ vX.Y.Z dispo (chezmoi update)` à la suite de la notice de version, jusqu'à ce que `chezmoi update` rattrape la version. Remplace l'ancien message imprimé de façon asynchrone par la tâche de fond (qui tombait n'importe où, en plein prompt ou commande). Comparaison numérique champ par champ (`1.10.0` > `1.9.2`, ce que l'ancien `!=` ne faisait pas : une version locale plus récente que la distante déclenchait aussi l'alerte). Le résultat d'un fetch est visible dès le shell suivant. `CHEZMOI_NO_UPDATE_CHECK=1` désactive fetch et notice ; jamais en session distante
+
 ## 1.9.2
 - fix: `prompt.sh`/`prompt.zsh`/`completion.sh` — sous WSL sans intégration Docker Desktop, `/usr/bin/docker` est un stub qui affiche « The command 'docker' could not be found in this WSL distro... » : `command -v docker` le trouve, donc ce message finissait dans le segment `docker` du prompt (sortie de `docker context show` prise pour un nom de contexte) et le hookup de complétion l'évaluait comme un script. Les codes retour de `docker context show`/`docker completion`/`task --completion` sont désormais vérifiés, et un « contexte » contenant un espace (jamais un vrai nom) est ignoré : stub WSL = comme docker absent
 

@@ -447,6 +447,27 @@ _chezmoi_bench() {
 }
 
 ## --- Vérification de version (async, non bloquant) ---
+## Le premier shell de la journée (throttle 24h, CHEZMOI_CACHE) lance en arrière-plan un curl vers
+## le VERSION de origin/main et range le résultat dans CHEZMOI_REMOTE_VERSION_FILE. Rien n'est
+## imprimé par la tâche de fond (un message asynchrone tombait n'importe où, en plein prompt ou
+## commande) : c'est le prompt qui lit ce fichier, cf. "Notice de mise à jour" plus bas. Le
+## résultat d'un fetch est donc visible dès le shell suivant (le curl n'a pas fini avant le
+## premier prompt du shell qui l'a lancé) ; un fetch qui échoue (hors-ligne) laisse l'ancien fichier.
+CHEZMOI_REMOTE_VERSION_FILE="${CHEZMOI_REMOTE_VERSION_FILE:-$HOME/.cache/chezmoi_remote_version}"
+
+## $1 strictement plus récent que $2 ? (comparaison numérique champ par champ : 1.10.0 > 1.9.2,
+## ce que ni "!=" ni un tri lexicographique ne donnent)
+_chezmoi_version_newer() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, "."); if (m > n) n = m
+        for (i = 1; i <= n; i++) {
+            if (x[i] + 0 > y[i] + 0) exit 0
+            if (x[i] + 0 < y[i] + 0) exit 1
+        }
+        exit 1
+    }'
+}
+
 _chezmoi_check_update() {
     mkdir -p "$(dirname "$CHEZMOI_CACHE")"
     local now last_check
@@ -455,13 +476,14 @@ _chezmoi_check_update() {
     [ $((now - last_check)) -lt 86400 ] && return
     (
         local remote_version
-        remote_version=$(curl -fsSL --max-time 1 \
+        remote_version=$(curl -fsSL --max-time 2 \
             "https://raw.githubusercontent.com/${CHEZMOI_REPO}/main/VERSION" 2>/dev/null)
-        if [ -n "$remote_version" ] && [ "$remote_version" != "$CHEZMOI_VERSION" ]; then
-            printf "%b\n" "${_CHEZMOI_WARN}chezmoi: nouvelle version disponible (${remote_version}, actuelle: ${CHEZMOI_VERSION})${_CHEZMOI_RESET}" >&2
+        ## Un vrai numéro de version uniquement (pas une page d'erreur/portail captif).
+        if printf '%s' "$remote_version" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+            printf '%s\n' "$remote_version" > "$CHEZMOI_REMOTE_VERSION_FILE"
+            echo "$now" > "$CHEZMOI_CACHE"
         fi
-        echo "$now" > "$CHEZMOI_CACHE"
-    ) & disown 2>/dev/null
+    ) >/dev/null 2>&1 & disown 2>/dev/null
 }
 [ -z "$CHEZMOI_NO_UPDATE_CHECK" ] && [ -z "$CHEZMOI_REMOTE" ] && _chezmoi_check_update
 
@@ -481,4 +503,21 @@ if [ -z "$CHEZMOI_NO_BANNER" ]; then
         _CHEZMOI_PROMPT_NOTICE="\[\033[38;5;108m\]chezmoi\[\033[0m\] \[\033[38;5;110m\]v${CHEZMOI_VERSION}\[\033[0m\]"
         [ -n "$CHEZMOI_REMOTE" ] && _CHEZMOI_PROMPT_NOTICE="${_CHEZMOI_PROMPT_NOTICE} \[\033[38;5;179m\]remote\[\033[0m\]"
     fi
+fi
+
+## --- Notice de mise à jour ---
+## Ajoutée à la notice du premier prompt (même mécanisme que la version, cf. plus haut) quand le
+## dernier fetch a vu une version strictement plus récente que la locale. Lue depuis le fichier à
+## chaque démarrage de shell : après "chezmoi update" (qui re-source le barrel), la version locale
+## rattrape la distante et la notice disparaît toute seule. Pas de fetch en session distante.
+if [ -z "$CHEZMOI_NO_UPDATE_CHECK" ] && [ -z "$CHEZMOI_REMOTE" ]; then
+    _chezmoi_remote_version=$(cat "$CHEZMOI_REMOTE_VERSION_FILE" 2>/dev/null)
+    if [ -n "$_chezmoi_remote_version" ] && _chezmoi_version_newer "$_chezmoi_remote_version" "$CHEZMOI_VERSION"; then
+        if [ -n "$ZSH_VERSION" ]; then
+            _CHEZMOI_PROMPT_NOTICE="${_CHEZMOI_PROMPT_NOTICE:+$_CHEZMOI_PROMPT_NOTICE }%F{179}⬆ v${_chezmoi_remote_version} dispo (chezmoi update)%f"
+        else
+            _CHEZMOI_PROMPT_NOTICE="${_CHEZMOI_PROMPT_NOTICE:+$_CHEZMOI_PROMPT_NOTICE }\[\033[38;5;179m\]⬆ v${_chezmoi_remote_version} dispo (chezmoi update)\[\033[0m\]"
+        fi
+    fi
+    unset _chezmoi_remote_version
 fi

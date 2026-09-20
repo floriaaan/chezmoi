@@ -2,7 +2,7 @@
 
 Personal shell config, modular. Barrel file `chezmoi.sh` sources modules, checks for updates, self-updates via git. Works under bash and zsh.
 
-Plus de bannière `chezmoi vX.Y.Z chargé` au chargement : la version est injectée dans le **premier prompt** de la session, en bout de ligne d'infos (`... ⚡80% chezmoi v1.9.1`), puis disparaît — les prompts suivants sont inchangés. Prompt mono-ligne (thèmes `default`/`minimal`) : la notice prend sa propre ligne juste au-dessus. Rien n'est imprimé dans les shells non interactifs (scripts, `ssh <commande>`). `CHEZMOI_NO_BANNER=1` la supprime.
+Plus de bannière `chezmoi vX.Y.Z chargé` au chargement : la version est injectée dans le **premier prompt** de la session, en bout de ligne d'infos (`... ⚡80% chezmoi v1.9.1`), puis disparaît — les prompts suivants sont inchangés. Prompt mono-ligne (thèmes `default`/`minimal`) : la notice prend sa propre ligne juste au-dessus. Rien n'est imprimé dans les shells non interactifs (scripts, `ssh <commande>`). `CHEZMOI_NO_BANNER=1` la supprime. Auto-scan de mise à jour : le premier shell de la journée interroge en arrière-plan le `VERSION` de origin/main ; si une version plus récente existe, le premier prompt des shells suivants ajoute `⬆ vX.Y.Z dispo (chezmoi update)` jusqu'à la mise à jour. `CHEZMOI_NO_UPDATE_CHECK=1` le désactive.
 
 Built with zero-install constraint in mind: no ability to install packages (no sudo / no admin rights) on target machines. Pure bash/zsh + core POSIX utils (`awk`, `sed`, `grep`, `curl`, `git`) only — no external deps, no package managers, no compiled binaries. Everything works by just cloning and sourcing.
 
