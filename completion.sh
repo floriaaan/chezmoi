@@ -145,12 +145,13 @@ _completion_bash_completion_satisfied() {
 _completion_hookup_task() {
     emulate -L bash 2>/dev/null
     command -v task >/dev/null 2>&1 || return 0
+    local script
     if [ -n "$ZSH_VERSION" ]; then
-        eval "$(task --completion zsh 2>/dev/null)" 2>/dev/null
+        script=$(task --completion zsh 2>/dev/null) || return 0
+        eval "$script" 2>/dev/null
         return
     fi
-    local script
-    script=$(task --completion bash 2>/dev/null)
+    script=$(task --completion bash 2>/dev/null) || return 0
     [ -n "$script" ] || return 0
     _completion_bash_completion_satisfied "$script" || return 0
     eval "$script" 2>/dev/null
@@ -162,12 +163,16 @@ _completion_hookup_task() {
 _completion_hookup_docker() {
     emulate -L bash 2>/dev/null
     command -v docker >/dev/null 2>&1 || return 0
+    ## WSL sans intégration Docker Desktop : /usr/bin/docker est un stub qui affiche "The command
+    ## 'docker' could not be found in this WSL distro..." et sort en erreur. Le code retour est
+    ## vérifié (le stub n'est jamais évalué comme script de complétion).
+    local script
     if [ -n "$ZSH_VERSION" ]; then
-        eval "$(docker completion zsh 2>/dev/null)" 2>/dev/null
+        script=$(docker completion zsh 2>/dev/null) || return 0
+        eval "$script" 2>/dev/null
         return
     fi
-    local script
-    script=$(docker completion bash 2>/dev/null)
+    script=$(docker completion bash 2>/dev/null) || return 0
     [ -n "$script" ] || return 0
     _completion_bash_completion_satisfied "$script" || return 0
     eval "$script" 2>/dev/null

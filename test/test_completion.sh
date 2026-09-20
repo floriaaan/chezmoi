@@ -472,3 +472,36 @@ TASKEOF
 }
 
 fi
+
+## --- WSL sans intégration Docker Desktop : /usr/bin/docker est un stub qui affiche un message ---
+
+_test_wsl_docker_stub() {
+    local d
+    d=$(mktemp -d)
+    cat > "$d/docker" <<'STUB'
+#!/usr/bin/env bash
+echo "The command 'docker' could not be found in this WSL distro. We recommend to activate the WSL integration in Docker Desktop settings."
+exit 1
+STUB
+    chmod +x "$d/docker"
+    printf '%s' "$d"
+}
+
+test_docker_hookup_ignores_wsl_stub() {
+    (
+        PATH="$(_test_wsl_docker_stub):$PATH"
+        local out
+        out=$(_completion_hookup_docker 2>&1)
+        assert_eq "" "$out" "stub WSL docker -> hookup silencieux (rien évalué, rien affiché)"
+    )
+}
+
+test_docker_prompt_segment_hides_wsl_stub_message() {
+    (
+        PATH="$(_test_wsl_docker_stub):$PATH"
+        if [ -n "$ZSH_VERSION" ]; then source "$_test_repo_dir/prompt.zsh"; else source "$_test_repo_dir/prompt.sh"; fi
+        _docker_cache_time=0
+        _docker_refresh_cache
+        assert_eq "" "$_docker_cache_ctx" "stub WSL docker -> pas de contexte affiché dans le segment"
+    )
+}

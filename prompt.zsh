@@ -178,7 +178,11 @@ _docker_refresh_cache() {
     [ $((now - _docker_cache_time)) -lt "$_DOCKER_CACHE_TTL" ] && return
     _docker_cache_time=$now
     if command -v docker >/dev/null 2>&1; then
-        _docker_cache_ctx=$(docker context show 2>/dev/null)
+        _docker_cache_ctx=$(docker context show 2>/dev/null) || _docker_cache_ctx=""
+        ## WSL sans intégration Docker Desktop : /usr/bin/docker est un stub qui affiche "The command
+        ## 'docker' could not be found in this WSL distro..." (sur stdout) -- `command -v` le trouve,
+        ## et sa sortie finissait dans le segment. Un vrai nom de contexte n'a jamais d'espace.
+        case "$_docker_cache_ctx" in *[[:space:]]*) _docker_cache_ctx="" ;; esac
     else
         _docker_cache_ctx=""
     fi
