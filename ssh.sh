@@ -30,6 +30,11 @@ _SSH_RESET='\033[0m'
 
 alias ssh-raw='command ssh'
 
+## Le CLI tourne dans un processus Bash séparé (strict mode, exec ssh).
+appssh() {
+    bash "$CHEZMOI_DIR/appssh.sh" "$@"
+}
+
 ## --- Injection active seulement pour une session ssh interactive et sans commande distante ---
 ## Options ssh qui consomment un argument séparé : -B -b -c -D -E -e -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w
 _ssh_wrapper_should_inject() {
@@ -149,6 +154,8 @@ _ssh_build_payload() {
     emulate -L bash 2>/dev/null
     local mod file theme segments payload=""
     for mod in $_SSH_CHEZMOI_MODULES; do
+        ## Outils SSH locaux uniquement, même si sélectionnés dans ssh.modules.
+        case "$mod" in appssh|ssh) continue ;; esac
         if [ "$mod" = "prompt" ]; then
             if [ "$_SSH_CHEZMOI_SHELL" = "zsh" ]; then
                 file="$CHEZMOI_DIR/prompt.zsh"

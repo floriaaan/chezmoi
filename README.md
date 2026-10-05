@@ -77,6 +77,61 @@ ssh myhost           # prompt/git-aliases/gtag available remotely, nothing writt
 ssh-chezmoi-test myhost   # diagnose without opening a session
 ```
 
+## Connexions applicatives : `appssh`
+
+Disponible en Bash et zsh dès que `chezmoi.sh` est sourcé (module `ssh` activé).
+Après une mise à jour locale, lancer `chezmoi reload`. Ce dépôt est une config shell
+à sourcer, pas un répertoire source de l'outil de dotfiles `chezmoi` : il n'a pas de
+commande `chezmoi apply`. Le CLI peut aussi être lancé par `bash /path/to/appssh.sh`.
+Il utilise uniquement les builtins Bash et le client OpenSSH, sans framework ni installation.
+
+```bash
+appssh exemple -r                    # ssh apiexemple-recette, si cet alias existe
+appssh portail --production         # ssh portail-production
+appssh exemple -r db                 # ssh apiexemple-recette-db-tunnel
+appssh exemple -p logs               # ssh apiexemple-production 'pm2 logs'
+appssh exemple -p logs --lines 100    # -n 100 est équivalent
+appssh exemple --resolve             # aliases de ce service, tous environnements/tunnels
+appssh --services                  # services dédupliqués, préfixe api retiré
+appssh --help
+```
+
+Un environnement est obligatoire : `-d`/`--dev`, `-r`/`--recette`, `-p`/`--production`.
+La production n'est jamais implicite ; sa cible et la commande distante éventuelle
+sont affichées sur stderr, sans confirmation. Le nombre de lignes doit être un entier
+strictement positif. Codes de sortie : `2` pour les arguments invalides, `1` pour les
+erreurs de découverte/résolution ; sinon, le statut du client SSH est conservé.
+
+La source de vérité est `~/.ssh/config`. Le script découvre les aliases littéraux des
+directives `Host` (plusieurs aliases par ligne possibles), sans mapping. Il cherche
+`<service>-<environnement>` et `api<service>-<environnement>`, avec `-db-tunnel` pour
+`db`. Deux candidats provoquent une erreur qui les liste : utiliser alors le préfixe
+complet, par exemple `appssh apiexemple -p`. `--resolve` affiche les deux familles si
+elles existent ; `--services` est une liste indicative, pas un mapping de résolution.
+
+Les `Include` globaux sont parcourus récursivement : chemins absolus, `~/`, chemins
+relatifs à `~/.ssh`, guillemets, commentaires et globs. Les répétitions d'aliases sont
+dédupliquées ; la profondeur est limitée à 16 pour détecter les cycles. Placer les
+`Include` définissant des aliases avant les blocs `Host`/`Match`, ou sous `Host *` seul.
+Les `Include` conditionnels sont ignorés avec un avertissement. Les expansions `~autre`
+et les expressions avancées de chemins ne sont pas prises en charge ; les fichiers
+système `/etc/ssh/ssh_config` ne sont pas énumérés. Les aliases reconnus sont des noms
+littéraux ASCII alphanumériques avec `.`, `_` ou `-`.
+
+Les règles `Host *`, les wildcards et les motifs négatifs ne créent aucun alias dans
+la découverte. Un alias littéral exclu par une négation dans sa propre directive
+`Host` est ignoré. Le script n'utilise pas `ssh -G` comme preuve d'existence : OpenSSH
+produit aussi une configuration pour des noms non déclarés. La configuration finale
+(options, `Match`, proxy, etc.) reste interprétée par OpenSSH lors de `exec ssh`.
+`appssh` utilise directement ce client ; le wrapper interactif `ssh.sh` n'est pas injecté.
+Les modules locaux `appssh` et `ssh` sont explicitement exclus du payload envoyé par
+le wrapper SSH, même s'ils sont sélectionnés dans `ssh.modules`.
+
+Pour ajouter une action distante, ajouter son nom aux actions acceptées dans le parsing
+de `appssh.sh`, une fonction sœur de `run_logs`, puis une branche dans le dispatch final.
+Construire une commande fixe, valider ses paramètres et terminer par `exec ssh` ; aucune
+modification de la découverte des services n'est nécessaire.
+
 ## Requirements
 
 bash or zsh, git, curl (for update check).
