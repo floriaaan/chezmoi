@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.0
+- feat: `appssh` — CLI Bash sans dépendance ajoutée pour les connexions SSH applicatives : découverte des aliases littéraux depuis `~/.ssh/config` et ses `Include` globaux, résolution dynamique des préfixes avec ou sans `api`, erreur sur les ambiguïtés et environnement obligatoire (`-d`/`-r`/`-p`). Actions `db` et `logs` PM2 (`--lines`/`-n`), affichage explicite des cibles de production, commandes `--resolve` et `--services`
+- feat: `appssh service1 service2 -r db` — lancement de deux tunnels DB dans le même environnement après résolution des deux aliases ; Ctrl+C ou l'arrêt d'un tunnel ferme les deux sessions, avec conservation du statut du premier tunnel terminé
+- fix: `ssh.sh` — exclusion explicite des modules locaux `appssh` et `ssh` du payload distant, même s'ils sont sélectionnés dans `ssh.modules`
+
 ## 1.10.0
 - feat: `chezmoi.sh` — auto-scan de mise à jour : le premier shell de la journée (throttle 24h) récupère en arrière-plan le `VERSION` de origin/main (timeout 2s, jamais bloquant) et le range dans `~/.cache/chezmoi_remote_version` (seulement si c'est un vrai numéro de version) ; quand elle est strictement plus récente que la locale, le premier prompt de chaque nouveau shell affiche `⬆ vX.Y.Z dispo (chezmoi update)` à la suite de la notice de version, jusqu'à ce que `chezmoi update` rattrape la version. Remplace l'ancien message imprimé de façon asynchrone par la tâche de fond (qui tombait n'importe où, en plein prompt ou commande). Comparaison numérique champ par champ (`1.10.0` > `1.9.2`, ce que l'ancien `!=` ne faisait pas : une version locale plus récente que la distante déclenchait aussi l'alerte). Le résultat d'un fetch est visible dès le shell suivant. `CHEZMOI_NO_UPDATE_CHECK=1` désactive fetch et notice ; jamais en session distante
 
