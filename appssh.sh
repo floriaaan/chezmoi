@@ -10,6 +10,7 @@ show_help() {
     printf '%s\n' \
         'Usage:' \
         '  appssh <service> <-d|-r|-p> [db]' \
+        '  appssh <service1> <service2> <-d|-r|-p> db' \
         '  appssh <service> <-d|-r|-p> logs [--lines N|-n N]' \
         '  appssh <service> --resolve' \
         '  appssh --services' \
@@ -19,6 +20,7 @@ show_help() {
         '  appssh exemple -r' \
         '  appssh exemple -p' \
         '  appssh exemple -r db' \
+        '  appssh exemple portail -r db' \
         '  appssh exemple -p logs' \
         '  appssh exemple -p logs --lines 100'
 }
@@ -130,10 +132,50 @@ discover_ssh_hosts() {
     done < "$file"
 }
 
+run_two_tunnels() {
+    local target tunnel_pid tunnel_status ready=0
+    local -a tunnel_pids=('')
+    cleanup_tunnels() {
+        trap - CHLD
+        for tunnel_pid in "${tunnel_pids[@]:1}"; do
+            kill "$tunnel_pid" 2>/dev/null || :
+        done
+        for tunnel_pid in "${tunnel_pids[@]:1}"; do
+            wait "$tunnel_pid" 2>/dev/null || :
+        done
+    }
+    # Bash 3.2 has no wait -n: SIGCHLD lets us detect either tunnel ending.
+    check_tunnels() {
+        ((ready)) || return 0
+        for tunnel_pid in "${tunnel_pids[@]:1}"; do
+            if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+                if wait "$tunnel_pid"; then tunnel_status=0; else tunnel_status=$?; fi
+                exit "$tunnel_status"
+            fi
+        done
+    }
+    trap cleanup_tunnels EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    trap check_tunnels CHLD
+    for target in "$@"; do
+        [[ "$environment" != production ]] || printf '[production] %s\n' "$target" >&2
+        printf '[db] %s\n' "$target" >&2
+        # Keep both sessions attached to this process, without a shared master.
+        ssh -N -o ExitOnForwardFailure=yes -o ForkAfterAuthentication=no \
+            -o ControlMaster=no -o ControlPath=none "$target" &
+        tunnel_pids+=("$!")
+    done
+    ready=1
+    check_tunnels
+    wait
+}
+
 main() {
     local config="$1"
     shift
-    service='' environment='' action='' lines='' mode=''
+    service='' second_service='' environment='' action='' lines='' mode=''
     while (($#)); do
         case "$1" in
             -h|--help) show_help; exit 0 ;;
@@ -159,12 +201,16 @@ main() {
                     [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || usage_error "Invalid service: $1"
                     service=$1
                 elif [[ -z "$action" && ( "$1" == db || "$1" == logs ) ]]; then action=$1
+                elif [[ -z "$action$second_service" ]]; then
+                    [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || usage_error "Invalid service: $1"
+                    second_service=$1
                 else usage_error "Unexpected argument: $1"; fi
                 ;;
         esac
         shift
     done
 
+    [[ -z "$second_service" || ( "$action" == db && -z "$mode" ) ]] || usage_error 'Two services are supported only with db'
     if [[ -n "$mode" ]]; then
         [[ -z "$environment$action$lines" ]] || usage_error 'Discovery modes do not accept an environment or action'
         if [[ "$mode" == --services ]]; then
@@ -200,26 +246,38 @@ main() {
         exit 0
     fi
 
-    matches=('')
-    for host in "${hosts[@]}"; do
-        if [[ "$mode" == --resolve ]]; then
-            service_from_host "$host" || continue
-            [[ "$detected_service" == "$service" || "$detected_service" == "api$service" ]] || continue
-        else
-            suffix="-$environment"
-            [[ "$action" != db ]] || suffix+='-db-tunnel'
-            [[ "$host" == "$service$suffix" || "$host" == "api$service$suffix" ]] || continue
+    resolve_service_host() {
+        matches=('')
+        for host in "${hosts[@]}"; do
+            if [[ "$mode" == --resolve ]]; then
+                service_from_host "$host" || continue
+                [[ "$detected_service" == "$service" || "$detected_service" == "api$service" ]] || continue
+            else
+                suffix="-$environment"
+                [[ "$action" != db ]] || suffix+='-db-tunnel'
+                [[ "$host" == "$service$suffix" || "$host" == "api$service$suffix" ]] || continue
+            fi
+            matches+=("$host")
+        done
+        ((${#matches[@]} > 1)) || fail "No explicit SSH alias found for service \"$service\"${environment:+ ($environment${action:+, $action})}"
+        if [[ "$mode" == --resolve ]]; then printf '%s\n' "${matches[@]:1}"; exit 0; fi
+        if ((${#matches[@]} > 2)); then
+            printf 'Ambiguous service "%s":\n' "$service" >&2
+            printf '  %s\n' "${matches[@]:1}" >&2
+            fail 'Use the full service name'
         fi
-        matches+=("$host")
-    done
-    ((${#matches[@]} > 1)) || fail "No explicit SSH alias found for service \"$service\"${environment:+ ($environment${action:+, $action})}"
-    if [[ "$mode" == --resolve ]]; then printf '%s\n' "${matches[@]:1}"; exit 0; fi
-    if ((${#matches[@]} > 2)); then
-        printf 'Ambiguous service "%s":\n' "$service" >&2
-        printf '  %s\n' "${matches[@]:1}" >&2
-        fail 'Use the full service name'
+        host=${matches[1]}
+    }
+
+    resolve_service_host
+    if [[ -n "$second_service" ]]; then
+        local first_host="$host"
+        service=$second_service
+        resolve_service_host
+        [[ "$first_host" != "$host" ]] || usage_error 'Choose two different tunnel aliases'
+        run_two_tunnels "$first_host" "$host"
+        return
     fi
-    host=${matches[1]}
 
     run_logs() {
         local remote_command='pm2 logs'

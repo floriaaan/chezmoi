@@ -89,6 +89,7 @@ Il utilise uniquement les builtins Bash et le client OpenSSH, sans framework ni 
 appssh exemple -r                    # ssh apiexemple-recette, si cet alias existe
 appssh portail --production         # ssh portail-production
 appssh exemple -r db                 # ssh apiexemple-recette-db-tunnel
+appssh exemple portail -r db         # deux tunnels DB, même environnement
 appssh exemple -p logs               # ssh apiexemple-production 'pm2 logs'
 appssh exemple -p logs --lines 100    # -n 100 est équivalent
 appssh exemple --resolve             # aliases de ce service, tous environnements/tunnels
@@ -101,6 +102,13 @@ La production n'est jamais implicite ; sa cible et la commande distante éventue
 sont affichées sur stderr, sans confirmation. Le nombre de lignes doit être un entier
 strictement positif. Codes de sortie : `2` pour les arguments invalides, `1` pour les
 erreurs de découverte/résolution ; sinon, le statut du client SSH est conservé.
+
+Avec deux services et l'action `db`, les deux aliases sont résolus avant de lancer
+les connexions. Les tunnels restent au premier plan ; Ctrl+C les ferme ensemble.
+Si l'un se termine ou échoue, l'autre est fermé et le statut du premier tunnel
+terminé est conservé. OpenSSH reçoit `-N` et `ExitOnForwardFailure=yes` ; les sessions
+ne se détachent pas et n'utilisent pas de connexion multiplexée. Les ports locaux
+des deux configurations `LocalForward` doivent être distincts.
 
 La source de vérité est `~/.ssh/config`. Le script découvre les aliases littéraux des
 directives `Host` (plusieurs aliases par ligne possibles), sans mapping. Il cherche

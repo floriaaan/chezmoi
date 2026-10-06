@@ -78,3 +78,62 @@ test_appssh_excluded_from_remote_payload() {
         assert_match 'alias ga=' "$payload" 'selected remote modules are still included'
     )
 }
+
+test_appssh_two_tunnels() {
+    (
+        _appssh_fixture
+        trap 'rm -rf "$_appssh_tmp"' EXIT
+        printf 'Host portail-recette-db-tunnel portail-production-db-tunnel\n' >> "$_appssh_tmp/config"
+        assert_failure 'both services require db' -- _appssh_invoke exemple portail -r
+        assert_failure 'logs accepts only one service' -- _appssh_invoke exemple portail -r logs
+        assert_failure 'same alias cannot be launched twice' -- _appssh_invoke exemple apiexemple -r db
+        assert_failure 'both aliases must exist' -- _appssh_invoke exemple absent -r db
+
+        cat > "$_appssh_tmp/bin/ssh" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$APPSSH_TEST_EVENTS"
+sleep 10 &
+hold_pid=$!
+trap 'kill "$hold_pid" 2>/dev/null; wait "$hold_pid" 2>/dev/null; printf "stopped %s\n" "${!#}" >> "$APPSSH_TEST_EVENTS"; exit 0' TERM
+if [[ "${!#}" == portail-recette-db-tunnel && "$APPSSH_TEST_MODE" == fail ]]; then
+    sleep 0.2
+    kill "$hold_pid" 2>/dev/null
+    wait "$hold_pid" 2>/dev/null
+    exit 23
+fi
+wait "$hold_pid"
+EOF
+        local cli_pid watchdog_pid pair_status out attempt
+        export APPSSH_TEST_EVENTS="$_appssh_tmp/events" APPSSH_TEST_MODE=fail
+        PATH="$_appssh_tmp/bin:$PATH" bash -c 'source "$1/appssh.sh"; main "$2" exemple portail -r db' \
+            appssh "$_appssh_test_repo" "$_appssh_tmp/config" > "$_appssh_tmp/output" 2>&1 &
+        cli_pid=$!
+        (sleep 3; kill -TERM "$cli_pid" 2>/dev/null) &
+        watchdog_pid=$!
+        wait "$cli_pid"; pair_status=$?
+        kill "$watchdog_pid" 2>/dev/null
+        wait "$watchdog_pid" 2>/dev/null
+        assert_eq 23 "$pair_status" 'second tunnel failure stops the first and preserves its exit status'
+        out=$(cat "$APPSSH_TEST_EVENTS")
+        assert_match 'stopped apiexemple-recette-db-tunnel' "$out" 'remaining tunnel is cleaned up'
+        assert_match 'ExitOnForwardFailure=yes' "$out" 'forwarding failures are fatal'
+        assert_match '\[db\] portail-recette-db-tunnel' "$(cat "$_appssh_tmp/output")" 'both targets are displayed'
+
+        : > "$APPSSH_TEST_EVENTS"
+        APPSSH_TEST_MODE=hold
+        PATH="$_appssh_tmp/bin:$PATH" bash -c 'source "$1/appssh.sh"; main "$2" exemple portail -p db' \
+            appssh "$_appssh_test_repo" "$_appssh_tmp/config" > "$_appssh_tmp/output" 2>&1 &
+        cli_pid=$!
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            [ "$(wc -l < "$APPSSH_TEST_EVENTS" | tr -d ' ')" -ge 2 ] && break
+            sleep 0.1
+        done
+        kill -TERM "$cli_pid"
+        wait "$cli_pid"; pair_status=$?
+        assert_eq 143 "$pair_status" 'termination stops the tunnel command'
+        out=$(cat "$APPSSH_TEST_EVENTS")
+        assert_match 'stopped apiexemple-production-db-tunnel' "$out" 'termination cleans up first tunnel'
+        assert_match 'stopped portail-production-db-tunnel' "$out" 'termination cleans up second tunnel'
+        assert_match '\[production\] portail-production-db-tunnel' "$(cat "$_appssh_tmp/output")" 'production displays both tunnel targets'
+    )
+}
